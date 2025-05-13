@@ -78,6 +78,9 @@ export async function GET(request: Request) {
   const today = formatDate(new Date());
   const sinceDate = formatDate(getDateNDaysAgo(days));
 
+  console.log(`오늘 날짜: ${today}`);
+  console.log(`sinceDate: ${sinceDate}`);
+
   try {
     let rateHistory = await getRateHistory();
     const newHistory = { ...rateHistory };
@@ -85,17 +88,21 @@ export async function GET(request: Request) {
     let missingDates: string[] = [];
     const lastAvailableDate = Object.keys(rateHistory).sort().pop();
 
-    if (!lastAvailableDate || lastAvailableDate < sinceDate) {
+    console.log(`lastAvailableDate: ${lastAvailableDate}`);
+
+    if (!lastAvailableDate || new Date(lastAvailableDate) < new Date(today)) {
       let page = 1;
       let done = false;
 
-      while (!done && page <= 30) {
+      while (!done && page <= 100) {
         const rates = await fetchRateByPage(page);
+        console.log(`페이지 ${page} 데이터:`, rates);
+
         if (rates.length === 0) break;
 
         for (const { date, rate } of rates) {
           if (newHistory[date]) continue;
-          if (date < sinceDate) {
+          if (new Date(date) < new Date(sinceDate)) {
             done = true;
             break;
           }
