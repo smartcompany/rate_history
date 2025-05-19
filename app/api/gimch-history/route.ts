@@ -78,7 +78,7 @@ async function fetchRateHistory(count = 200) {
   return await res.json(); // { 'YYYY-MM-DD': 환율, ... }
 }
 
-export async function fetchKimchiPremiumByPage(count: number) {
+async function fetchKimchiPremiumByPage(count: number) {
 
   const [upbit, bybit, rateHistory] = await Promise.all([
     fetchUpbitBTCByPage(count),
