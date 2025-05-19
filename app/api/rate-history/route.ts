@@ -22,6 +22,18 @@ function getDateNDaysAgo(n: number) {
   return d;
 }
 
+// sinceDate ~ today까지 모든 날짜 생성
+function getAllDates(sinceDate: string, today: string): string[] {
+  const dates = [];
+  let d = new Date(sinceDate);
+  const end = new Date(today);
+  while (d <= end) {
+    dates.push(formatDate(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return dates.reverse(); // 최신순
+}
+
 async function fetchRateByPage(page: number) {
   const response = await fetch(`${baseUrl}&page=${page}`);
   const html = await response.text();
@@ -120,10 +132,16 @@ export async function GET(request: Request) {
     }
 
     const result: Record<string, number> = {};
-    const allDates = Object.keys(newHistory).sort().reverse();
+    const allDates = getAllDates(sinceDate, today);
+
+    let prevRate: number | undefined = undefined;
     for (const date of allDates) {
-      if (date >= sinceDate) {
+      if (newHistory[date] !== undefined) {
         result[date] = newHistory[date];
+        prevRate = newHistory[date];
+      } else if (prevRate !== undefined) {
+        // 누락된 날짜는 이전 환율로 채움
+        result[date] = prevRate;
       }
     }
 
