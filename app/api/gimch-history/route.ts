@@ -26,7 +26,12 @@ async function fetchUpbitBTCByPage(count = 200) {
   const url = `https://api.upbit.com/v1/candles/days?market=KRW-BTC&count=${count}&to=${toStr}`;
   console.log(`[fetchUpbitBTCByPage] 요청 URL:`, url);
 
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      // 필요시 추가 헤더
+    }
+  });
   console.log(`[fetchUpbitBTCByPage] 응답 status:`, res.status);
 
   if (!res.ok) {
@@ -47,7 +52,12 @@ async function fetchBybitBTCByPage(count = 200) {
   const url = `https://api.bybit.com/v5/market/kline?category=spot&symbol=BTCUSDT&interval=D&limit=${count}`;
   console.log(`[fetchBybitBTCByPage] 요청 URL:`, url);
 
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      // 필요시 추가 헤더
+    }
+  });
   console.log(`[fetchBybitBTCByPage] 응답 status:`, res.status);
 
   const data = await res.json();
