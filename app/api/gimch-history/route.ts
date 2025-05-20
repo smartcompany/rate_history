@@ -45,37 +45,31 @@ async function fetchUpbitBTCByPage(count = 200) {
   return data; // [{candle_date_time_utc, trade_price, ...}, ...]
 }
 
-// 바이비트 일별 BTCUSDT 가격 가져오기
-async function fetchBybitBTCByPage(count = 200) {
-  const now = new Date();
-  const toTimestamp = Math.floor(now.getTime() / 1000);
-  const url = `https://api.bybit.com/v5/market/kline?category=spot&symbol=BTCUSDT&interval=D&limit=${count}`;
-  console.log(`[fetchBybitBTCByPage] 요청 URL:`, url);
+// 바이낸스 일별 BTCUSDT 가격 가져오기
+async function fetchBinanceBTCByPage(count = 200) {
+  const url = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=${count}`;
+  console.log(`[fetchBinanceBTCByPage] 요청 URL:`, url);
 
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0',
-      // 필요시 추가 헤더
-    }
-  });
-  console.log(`[fetchBybitBTCByPage] 응답 status:`, res.status);
+  const res = await fetch(url);
+  console.log(`[fetchBinanceBTCByPage] 응답 status:`, res.status);
 
-  const data = await res.json();
-  
-  if (!data.result || !Array.isArray(data.result.list) || data.result.list.length === 0) {
-    console.error('[fetchBybitBTCByPage] result.list 없음 또는 빈 배열:', data);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[fetchBinanceBTCByPage] 에러 응답:`, errText);
     return [];
   }
 
-  const mapped = data.result.list.map((item: any) => ({
-    date: new Date(Number(item[0])).toISOString().split('T')[0],
-    price: parseFloat(item[4]),
+  const data = await res.json();
+
+  // Binance 응답: [ [openTime, open, high, low, close, ...], ... ]
+  const mapped = data.map((item: any) => ({
+    date: new Date(item[0]).toISOString().split('T')[0],
+    price: parseFloat(item[4]), // 종가(close)
   }));
 
   // date 값만 출력
-  console.log('[fetchBybitBTCByPage] mapped date 리스트:', mapped.map(i => i.date));
-
-  console.log(`[fetchBybitBTCByPage] 파싱된 데이터 개수:`, mapped.length);
+  console.log('[fetchBinanceBTCByPage] mapped date 리스트:', mapped.map(i => i.date));
+  console.log(`[fetchBinanceBTCByPage] 파싱된 데이터 개수:`, mapped.length);
   return mapped;
 }
 
@@ -92,7 +86,7 @@ async function fetchKimchiPremiumByPage(count: number) {
 
   const [upbit, bybit, rateHistory] = await Promise.all([
     fetchUpbitBTCByPage(count),
-    fetchBybitBTCByPage(count),
+    fetchBinanceBTCByPage(count),
     fetchRateHistory(count),
   ]);
   
