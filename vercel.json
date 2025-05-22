@@ -1,9 +1,5 @@
 {
-    "functions": {
-        "api/**.[jt]s": {
-            "regions": ["sin1"]
-        }
-    },
+    "regions": ["sin1"],
     "headers": [
         {
             "source": "/api/(.*)",
