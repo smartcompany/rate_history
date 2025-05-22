@@ -130,6 +130,7 @@ async function getKimchiPremiumHistory() {
   const response = await fetch(storageUrl, {
     headers: { apikey: SUPABASE_KEY }
   });
+  if (response.status === 404) return {}; // 파일 없으면 빈 객체 반환
   if (!response.ok) throw new Error('Failed to fetch JSON from Supabase');
   return await response.json();
 }
@@ -189,7 +190,6 @@ export async function GET(request: Request) {
       }
 
       if (missingDates.length > 0) {
-        console.log('새로운 날짜 저장:', missingDates);
         await saveKimchiPremiumHistory(newHistory);
       }
     }
