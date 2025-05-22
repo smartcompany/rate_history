@@ -18,7 +18,7 @@ function formatDate(date: Date) {
  * @param count 가져올 일수 (최대 200)
  * @returns [{ date: 'YYYY-MM-DD', price: number }, ...]
  */
-export async function fetchUpbitUSDTByPage(count = 200) {
+async function fetchUpbitUSDTByPage(count = 200) {
   const url = `https://api.upbit.com/v1/candles/days?market=KRW-USDT&count=${count}`;
   console.log(`[fetchUpbitUSDTByPage] 요청 URL:`, url);
 
