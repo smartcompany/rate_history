@@ -22,8 +22,7 @@ function getDateNDaysAgo(n: number) {
 // 업비트 일별 BTC 가격 가져오기
 async function fetchUpbitBTCByPage(count = 200) {
   const toDate = new Date();
-  const toStr = toDate.toISOString().split('T')[0] + 'T00:00:00';
-  const url = `https://api.upbit.com/v1/candles/days?market=KRW-BTC&count=${count}&to=${toStr}`;
+  const url = `https://api.upbit.com/v1/candles/days?market=KRW-BTC&count=${count}`;
   console.log(`[fetchUpbitBTCByPage] 요청 URL:`, url);
 
   const res = await fetch(url, {
@@ -42,6 +41,11 @@ async function fetchUpbitBTCByPage(count = 200) {
 
   const data = await res.json();
   console.log(`[fetchUpbitBTCByPage] 데이터 개수:`, Array.isArray(data) ? data.length : 'not array');
+  // 날짜 리스트 로그 (최신 → 과거 순)
+  console.log(
+    '[fetchUpbitBTCByPage] mapped date 리스트:',
+    data.map((item: any) => item.candle_date_time_utc.split('T')[0])
+  );
   return data; // [{candle_date_time_utc, trade_price, ...}, ...]
 }
 
@@ -67,8 +71,11 @@ async function fetchBinanceBTCByPage(count = 200) {
     price: parseFloat(item[4]), // 종가(close)
   }));
 
-  // date 값만 출력
-  console.log('[fetchBinanceBTCByPage] mapped date 리스트:', mapped.map(i => i.date));
+  // date 값만 출력 (최신 → 과거 순으로)
+  console.log(
+    '[fetchBinanceBTCByPage] mapped date 리스트:',
+    mapped.map(i => i.date).reverse()
+  );
   console.log(`[fetchBinanceBTCByPage] 파싱된 데이터 개수:`, mapped.length);
   return mapped;
 }
