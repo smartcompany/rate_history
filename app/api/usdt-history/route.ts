@@ -78,10 +78,11 @@ async function saveUSDTPriceHistory(history: Record<string, number>) {
 }
 
 // Next.js Route Handler
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const count = 200;
-    const upbitData = await fetchUpbitUSDTByPage(count);
+    const { searchParams } = new URL(request.url);
+    const days = Number(searchParams.get('days') || '1');
+    const upbitData = await fetchUpbitUSDTByPage(days);
     const newHistory: Record<string, number> = {};
     upbitData.forEach(item => {
       newHistory[item.date] = item.price;
@@ -93,14 +94,16 @@ export async function GET() {
     const newDates = Object.keys(newHistory);
     const missingDates = newDates.filter(date => !prevDates.includes(date));
 
+    let merged = prevHistory;
     if (missingDates.length > 0) {
       // 누락된 날짜가 있으면 저장
-      const merged = { ...prevHistory, ...newHistory };
+      merged = { ...prevHistory, ...newHistory };
       await saveUSDTPriceHistory(merged);
       console.log('새로운 USDT 데이터 저장:', missingDates);
     }
 
-    return NextResponse.json({ status: 'ok', count: newDates.length });
+    // 날짜-가격 map 데이터 반환
+    return NextResponse.json(merged);
   } catch (err: any) {
     console.error(err);
     return NextResponse.json({ error: err.message }, { status: 500 });
