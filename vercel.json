@@ -18,5 +18,11 @@
                 }
             ]
         }
+    ],
+    "cron": [
+        {
+            "path": "/api/analyze-strategy",
+            "schedule": "0 3 * * *"
+        }
     ]
 }
