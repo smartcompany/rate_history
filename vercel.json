@@ -23,7 +23,7 @@
     "crons": [
         {
             "path": "/api/analyze-strategy",
-            "schedule": "0 5 * * *"
+            "schedule": "*/5 * * * *"
         }
     ]
 }
