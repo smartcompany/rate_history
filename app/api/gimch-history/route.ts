@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { differenceInCalendarDays } from 'date-fns'; // 상단에 추가 (date-fns 설치 필요)
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
@@ -155,57 +156,54 @@ async function saveKimchiPremiumHistory(data: any) {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const days = Number(searchParams.get('days') || '1');
 
+  let premiumHistory = await getKimchiPremiumHistory();
+  const newHistory = { ...premiumHistory };
+  const lastAvailableDate = Object.keys(premiumHistory).sort().pop();
+  const days = Number(searchParams.get('days'));
+
+  // 오늘 날짜
   const today = formatDate(new Date());
-  const sinceDate = formatDate(getDateNDaysAgo(days));
+
+  // 누락된 일수 계산
+  let missingDays = days;
+  if (lastAvailableDate) {
+    missingDays = differenceInCalendarDays(new Date(today), new Date(lastAvailableDate));
+  }
+  
+  const sortedHistory: Record<string, number> = newHistory;
 
   try {
-    console.log('GET kimchi-premium: 시작', { days, today, sinceDate });
+    console.log('GET kimchi-premium: 시작', { lastAvailableDate, today, missingDays });
 
-    let premiumHistory = await getKimchiPremiumHistory();
-    console.log('기존 premiumHistory 불러옴', Object.keys(premiumHistory).length);
+    if (missingDays > 0) {
+      console.log('누락된 일수:', missingDays);
+      const premiums = await fetchKimchiPremiumByPage(missingDays);
 
-    const newHistory = { ...premiumHistory };
-
-    let missingDates: string[] = [];
-    const lastAvailableDate = Object.keys(premiumHistory).sort().pop();
-    console.log('lastAvailableDate:', lastAvailableDate);
-
-    if (!lastAvailableDate || new Date(lastAvailableDate) < new Date(today)) {
-      let done = false;
- 
-      console.log(`김치 프리미엄 계산 시도`);
-      const premiums = await fetchKimchiPremiumByPage(days);
-      console.log(`페이지 premiums 개수:`, premiums.length);
-
-      for (const { date, premium } of premiums) {
-        if (newHistory[date]) continue;
-        if (new Date(date) < new Date(sinceDate)) {
-          done = true;
-          break;
+      if (premiums.length > 0) {
+        for (const { date, premium } of premiums) {
+          newHistory[date] = premium;
         }
-        newHistory[date] = premium;
-        missingDates.push(date);
-      }
 
-      if (missingDates.length > 0) {
-        await saveKimchiPremiumHistory(newHistory);
+        Object.keys(newHistory)
+          .sort()
+          .reverse()
+          .forEach(date => {
+            sortedHistory[date] = newHistory[date];
+          });
+
+        console.log('저장 직전 데이터:', sortedHistory);
+
+        await saveKimchiPremiumHistory(sortedHistory);
+        console.log('프리미엄 데이터 저장 완료:', Object.keys(sortedHistory).length);
+      } else {
+        console.log('유효한 프리미엄 데이터 없음');
       }
+    } else {
+      console.log('업데이트 필요 없음:', lastAvailableDate);
     }
 
-    const result: Record<string, number> = {};
-    const allDates = Object.keys(newHistory).sort().reverse();
-    console.log('최종 allDates 개수:', allDates.length);
-
-    for (const date of allDates) {
-      if (date >= sinceDate) {
-        result[date] = newHistory[date];
-      }
-    }
-
-    console.log('응답 데이터 개수:', Object.keys(result).length);
-    return NextResponse.json(result);
+    return NextResponse.json(sortedHistory);
   } catch (err) {
     console.error('김치 프리미엄 처리 에러:', err);
     return NextResponse.json({ error: "김치 프리미엄 데이터를 처리하지 못했습니다." }, { status: 500 });

@@ -31,7 +31,7 @@ function getAllDates(sinceDate: string, today: string): string[] {
     dates.push(formatDate(d));
     d.setDate(d.getDate() + 1);
   }
-  return dates.reverse(); // 최신순
+  return dates; // 최신순
 }
 
 async function fetchRateByPage(page: number) {
@@ -95,14 +95,13 @@ export async function GET(request: Request) {
 
   try {
     let rateHistory = await getRateHistory();
-    const newHistory = { ...rateHistory };
-
-    let missingDates: string[] = [];
+    let newHistory = { ...rateHistory };
     const lastAvailableDate = Object.keys(rateHistory).sort().pop();
 
     console.log(`lastAvailableDate: ${lastAvailableDate}`);
 
     if (!lastAvailableDate || new Date(lastAvailableDate) < new Date(today)) {
+      let missingDates: string[] = [];
       let page = 1;
       let done = false;
 
@@ -125,27 +124,31 @@ export async function GET(request: Request) {
         page += 1;
       }
 
-      if (missingDates.length > 0) {
-        await saveRateHistory(newHistory);
-        console.log(`추가된 날짜 수: ${missingDates.length}`);
+      const allDates = getAllDates(sinceDate, today);
+
+      let prevRate: number | undefined = undefined;
+      for (const date of allDates) {
+        if (newHistory[date] == undefined) {
+          console.log(`누락된 날짜 환율 채움: ${date} = ${prevRate}`);
+          newHistory[date] = prevRate;
+        } else {
+          prevRate = newHistory[date];
+        }
       }
+
+      const sortedHistory: Record<string, number> = {};
+      Object.keys(newHistory)
+        .sort()
+        .reverse()
+        .forEach(date => {
+          sortedHistory[date] = newHistory[date];
+        });
+      newHistory = sortedHistory;
+
+      await saveRateHistory(newHistory);
     }
 
-    const result: Record<string, number> = {};
-    const allDates = getAllDates(sinceDate, today);
-
-    let prevRate: number | undefined = undefined;
-    for (const date of allDates) {
-      if (newHistory[date] !== undefined) {
-        result[date] = newHistory[date];
-        prevRate = newHistory[date];
-      } else if (prevRate !== undefined) {
-        // 누락된 날짜는 이전 환율로 채움
-        result[date] = prevRate;
-      }
-    }
-
-    return NextResponse.json(result);
+    return NextResponse.json(newHistory);
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "환율 데이터를 처리하지 못했습니다." }, { status: 500 });
