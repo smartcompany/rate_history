@@ -98,8 +98,19 @@ export async function GET(request: Request) {
     if (missingDates.length > 0) {
       // 누락된 날짜가 있으면 저장
       merged = { ...prevHistory, ...newHistory };
-      await saveUSDTPriceHistory(merged);
+
+      // 날짜 기준 내림차순 정렬
+      const sorted: Record<string, number> = {};
+      Object.keys(merged)
+        .sort()
+        .reverse()
+        .forEach(date => {
+          sorted[date] = merged[date];
+        });
+
+      await saveUSDTPriceHistory(sorted);
       console.log('새로운 USDT 데이터 저장:', missingDates);
+      merged = sorted;
     }
 
     // 날짜-가격 map 데이터 반환
