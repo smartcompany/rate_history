@@ -58,6 +58,7 @@ USDT: ${JSON.stringify(usdtHistory)}
 아래와 같은 JSON 형태로만, 마크다운 코드블록(백틱 등) 없이 답변해줘.
 
 {
+  "analysis_date": (매매 분석 날짜, YYYY-MM-DD),
   "buy_price": (구매 추천 가격, 숫자),
   "sell_price": (판매 추천 가격, 숫자),
   "expected_return": (예상 수익률, % 단위 숫자),
@@ -96,29 +97,60 @@ summary에는 이렇게 가격을 판단한 근거에 대해 히스토리를 분
   return data.choices?.[0]?.message?.content ?? "분석 결과를 가져오지 못했습니다.";
 }
 
+// 날짜 비교 함수
+function isTodayOrFuture(dateStr: string) {
+  const today = new Date();
+  const target = new Date(dateStr);
+  // 오늘 날짜(시분초 제거)
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return target >= today;
+}
+
 // Next.js API Route Handler
 export async function GET() {
   try {
-    // 1. 데이터 읽기
+    // 1. 파일에서 기존 전략 읽기
+    const fileRes = await fetch(strategyUrl, {
+      headers: { apikey: SUPABASE_KEY }
+    });
+    let fileStrategy: any = null;
+    if (fileRes.ok) {
+      const text = await fileRes.text();
+      try {
+        fileStrategy = JSON.parse(text);
+      } catch {
+        fileStrategy = null;
+      }
+    }
+
+    // 2. analysis_date가 없거나 오늘 이전이면 새로 요청
+    let shouldUpdate = true;
+    if (fileStrategy && fileStrategy.analysis_date) {
+      shouldUpdate = !isTodayOrFuture(fileStrategy.analysis_date);
+    }
+
+    if (!shouldUpdate && fileStrategy) {
+      // 파일의 전략이 최신이면 바로 반환
+      return NextResponse.json(fileStrategy);
+    }
+
+    // 3. 최신 전략 필요시 ChatGPT에 요청
     const [usdtHistory, rateHistory, kimchiPremiumHistory] = await Promise.all([
       getUSDTPriceHistory(),
       getRateHistory(),
       getKimchiPremiumHistory(),
     ]);
 
-    // 데이터 콘솔 로그로 확인
-    console.log('USDT History:', JSON.stringify(usdtHistory, null, 2));
-    console.log('Rate History:', JSON.stringify(rateHistory, null, 2));
-    console.log('Kimchi Premium History:', JSON.stringify(kimchiPremiumHistory, null, 2));
-
-    // 2. ChatGPT에 전략 요청
     const strategy = await requestStrategyFromChatGPT(usdtHistory, rateHistory, kimchiPremiumHistory);
-    const response = NextResponse.json({ strategy });
-    const body = JSON.stringify({ strategy });
+    let parsedStrategy: any;
+    try {
+      parsedStrategy = JSON.parse(strategy);
+    } catch {
+      parsedStrategy = { strategy };
+    }
 
-    console.log('body:', body);
-    
-    // 2-1. 전략 결과를 Supabase에 저장
+    // 4. Supabase에 저장
     await fetch(strategyUploadUrl, {
       method: "PUT",
       headers: {
@@ -126,11 +158,11 @@ export async function GET() {
         apikey: SUPABASE_KEY,
         Authorization: `Bearer ${SUPABASE_KEY}`
       },
-      body: body
+      body: JSON.stringify(parsedStrategy)
     });
 
-    // 3. 결과 반환
-    return response;
+    // 5. 최신 전략 반환
+    return NextResponse.json(parsedStrategy);
   } catch (err: any) {
     console.error(err);
     return NextResponse.json({ error: err.message }, { status: 500 });
