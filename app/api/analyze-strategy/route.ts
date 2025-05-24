@@ -120,6 +120,7 @@ export async function GET() {
       try {
         fileStrategy = JSON.parse(text);
       } catch {
+        console.log('[analyze-strategy] fileStrategy is null')
         fileStrategy = null;
       }
     }
@@ -128,14 +129,17 @@ export async function GET() {
     let shouldUpdate = true;
     if (fileStrategy && fileStrategy.analysis_date) {
       shouldUpdate = !isTodayOrFuture(fileStrategy.analysis_date);
+      console.log('[analyze-strategy] shouldUpdate:', shouldUpdate, fileStrategy.analysis_date);
     }
 
     if (!shouldUpdate && fileStrategy) {
       // 파일의 전략이 최신이면 바로 반환
+      console.log('[analyze-strategy] 파일에서 전략 반환:', fileStrategy.analysis_date);
       return NextResponse.json(fileStrategy);
     }
 
     // 3. 최신 전략 필요시 ChatGPT에 요청
+    console.log('[analyze-strategy] ChatGPT API 호출 및 전략 갱신');
     const [usdtHistory, rateHistory, kimchiPremiumHistory] = await Promise.all([
       getUSDTPriceHistory(),
       getRateHistory(),
@@ -162,9 +166,10 @@ export async function GET() {
     });
 
     // 5. 최신 전략 반환
+    console.log('[analyze-strategy] 최신 전략 반환 및 저장:', parsedStrategy.analysis_date);
     return NextResponse.json(parsedStrategy);
   } catch (err: any) {
-    console.error(err);
+    console.error('[analyze-strategy] 에러:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
