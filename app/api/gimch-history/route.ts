@@ -171,8 +171,6 @@ export async function GET(request: Request) {
     missingDays = differenceInCalendarDays(new Date(today), new Date(lastAvailableDate));
   }
   
-  const sortedHistory: Record<string, number> = newHistory;
-
   try {
     console.log('GET kimchi-premium: 시작', { lastAvailableDate, today, missingDays });
 
@@ -185,6 +183,8 @@ export async function GET(request: Request) {
           newHistory[date] = premium;
         }
 
+        // 날짜 내림차순 정렬
+        const sortedHistory: Record<string, number> = {};
         Object.keys(newHistory)
           .sort()
           .reverse()
@@ -196,14 +196,18 @@ export async function GET(request: Request) {
 
         await saveKimchiPremiumHistory(sortedHistory);
         console.log('프리미엄 데이터 저장 완료:', Object.keys(sortedHistory).length);
+
+        // 반환도 sortedHistory로!
+        return NextResponse.json(sortedHistory);
       } else {
         console.log('유효한 프리미엄 데이터 없음');
+        return NextResponse.json(newHistory);
       }
     } else {
       console.log('업데이트 필요 없음:', lastAvailableDate);
     }
 
-    return NextResponse.json(sortedHistory);
+    return NextResponse.json(newHistory);
   } catch (err) {
     console.error('김치 프리미엄 처리 에러:', err);
     return NextResponse.json({ error: "김치 프리미엄 데이터를 처리하지 못했습니다." }, { status: 500 });
