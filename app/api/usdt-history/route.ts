@@ -20,33 +20,18 @@ function formatDate(date: Date) {
  */
 async function fetchUpbitUSDTByPage(count = 200) {
   const url = `https://api.upbit.com/v1/candles/days?market=KRW-USDT&count=${count}`;
-  console.log(`[fetchUpbitUSDTByPage] 요청 URL:`, url);
-
   const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0',
-    }
+    headers: { 'User-Agent': 'Mozilla/5.0' }
   });
-  console.log(`[fetchUpbitUSDTByPage] 응답 status:`, res.status);
-
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`[fetchUpbitUSDTByPage] 에러 응답:`, errText);
-    throw new Error('Upbit USDT fetch failed');
-  }
-
+  if (!res.ok) throw new Error('Upbit USDT fetch failed');
   const data = await res.json();
-  console.log(`[fetchUpbitUSDTByPage] 데이터 개수:`, Array.isArray(data) ? data.length : 'not array');
-  // 날짜 리스트 로그 (최신 → 과거 순)
-  console.log(
-    '[fetchUpbitUSDTByPage] mapped date 리스트:',
-    data.map((item: any) => item.candle_date_time_utc.split('T')[0])
-  );
 
-  // [{ date: 'YYYY-MM-DD', price: number }, ...] 형태로 변환
+  // [{ date, price, high, low }, ...] 형태로 변환
   return data.map((item: any) => ({
     date: item.candle_date_time_utc.split('T')[0],
     price: item.trade_price,
+    high: item.high_price,
+    low: item.low_price,
   }));
 }
 
@@ -61,7 +46,7 @@ async function getUSDTPriceHistory() {
 }
 
 // Supabase에 USDT 히스토리 저장하기
-async function saveUSDTPriceHistory(history: Record<string, number>) {
+async function saveUSDTPriceHistory(history: Record<string, { price: number; high: number; low: number }>) {
   const res = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
@@ -83,9 +68,13 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const days = Number(searchParams.get('days') || '1');
     const upbitData = await fetchUpbitUSDTByPage(days);
-    const newHistory: Record<string, number> = {};
+    const newHistory: Record<string, { price: number; high: number; low: number }> = {};
     upbitData.forEach(item => {
-      newHistory[item.date] = item.price;
+      newHistory[item.date] = {
+        price: item.price,
+        high: item.high,
+        low: item.low,
+      };
     });
 
     // 기존 데이터와 비교하여 누락된 날짜만 저장
@@ -100,7 +89,7 @@ export async function GET(request: Request) {
       merged = { ...prevHistory, ...newHistory };
 
       // 날짜 기준 내림차순 정렬
-      const sorted: Record<string, number> = {};
+      const sorted: Record<string, { price: number; high: number; low: number }> = {};
       Object.keys(merged)
         .sort()
         .reverse()

@@ -55,6 +55,7 @@ USDT: ${JSON.stringify(usdtHistory)}
 환율: ${JSON.stringify(rateHistory)}
 김치 프리미엄: ${JSON.stringify(kimchiPremiumHistory)}
 
+USDT 값은 "날짜":{"price":종가,"high":최고가,"low":최저가} 로 되어 있어 이 3개의 내용을 분석해서 
 아래와 같은 JSON 형태로만, 마크다운 코드블록(백틱 등) 없이 답변해줘.
 
 {
@@ -65,7 +66,7 @@ USDT: ${JSON.stringify(usdtHistory)}
   "summary": "한 줄 요약"
 }
 
-현재 시간 기준 USDT를 얼마에 사서 얼마에 팔면 좋을지 판단해주고, 이 전략의 예상 수익률도 계산해서 위 JSON으로만 답변해줘.
+향후 USDT를 얼마에 사서 얼마에 팔면 좋을지 판단해주고, 이 전략의 예상 수익률도 계산해서 위 JSON으로만 답변해줘.
 summary에는 이렇게 가격을 판단한 근거에 대해 히스토리를 분석한 내용을 담아줘.
 `;
 
