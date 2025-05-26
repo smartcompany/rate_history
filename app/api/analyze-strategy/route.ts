@@ -110,32 +110,43 @@ function isTodayOrFuture(dateStr: string) {
 // Next.js API Route Handler
 export async function GET() {
   try {
-    // 1. 파일에서 기존 전략 읽기
+    // 1. 파일에서 기존 전략 읽기 (배열 형태)
     const fileRes = await fetch(strategyUrl, {
       headers: { apikey: SUPABASE_KEY }
     });
-    let fileStrategy: any = null;
+    let strategyList: any[] = [];
     if (fileRes.ok) {
       const text = await fileRes.text();
       try {
-        fileStrategy = JSON.parse(text);
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          strategyList = parsed;
+        } else if (parsed) {
+          strategyList = [parsed];
+        }
       } catch {
-        console.log('[analyze-strategy] fileStrategy is null')
-        fileStrategy = null;
+        strategyList = [];
       }
     }
 
-    // 2. analysis_date가 없거나 오늘 이전이면 새로 요청
+    // 2. 최신 전략이 이미 있으면 반환
+    const latest = strategyList[0];
     let shouldUpdate = true;
-    if (fileStrategy && fileStrategy.analysis_date) {
-      shouldUpdate = !isTodayOrFuture(fileStrategy.analysis_date);
-      console.log('[analyze-strategy] shouldUpdate:', shouldUpdate, fileStrategy.analysis_date);
+    if (latest && latest.analysis_date) {
+      shouldUpdate = !isTodayOrFuture(latest.analysis_date);
+      console.log('[analyze-strategy] shouldUpdate:', shouldUpdate, latest.analysis_date);
     }
 
-    if (!shouldUpdate && fileStrategy) {
-      // 파일의 전략이 최신이면 바로 반환
-      console.log('[analyze-strategy] 파일에서 전략 반환:', fileStrategy.analysis_date);
-      return NextResponse.json(fileStrategy);
+    if (!shouldUpdate && latest) {
+      console.log('[analyze-strategy] 파일에서 최신 전략 반환:', latest.analysis_date);
+      // 최신 전략이 이미 있으면 전체 히스토리(배열) 반환 (가독성 있게)
+      return new Response(
+        JSON.stringify(strategyList, null, 2),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     // 3. 최신 전략 필요시 ChatGPT에 요청
@@ -154,7 +165,11 @@ export async function GET() {
       parsedStrategy = { strategy };
     }
 
-    // 4. Supabase에 저장
+    // 4. 배열 맨 앞에 추가 (최신이 맨 앞)
+    strategyList.unshift(parsedStrategy);
+    const body = JSON.stringify(strategyList, null, 2)
+
+    // 5. Supabase에 저장 (배열 전체)
     await fetch(strategyUploadUrl, {
       method: "PUT",
       headers: {
@@ -162,12 +177,18 @@ export async function GET() {
         apikey: SUPABASE_KEY,
         Authorization: `Bearer ${SUPABASE_KEY}`
       },
-      body: JSON.stringify(parsedStrategy)
+      body: body // ← 들여쓰기 추가!
     });
 
-    // 5. 최신 전략 반환
-    console.log('[analyze-strategy] 최신 전략 반환 및 저장:', parsedStrategy.analysis_date);
-    return NextResponse.json(parsedStrategy);
+    // 6. 전략 히스토리 전체 반환 (가독성 좋은 JSON)
+    console.log('[analyze-strategy] 전략 히스토리 전체 반환:', strategyList.length);
+    return new Response(
+      body, // 2스페이스 들여쓰기
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   } catch (err: any) {
     console.error('[analyze-strategy] 에러:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
