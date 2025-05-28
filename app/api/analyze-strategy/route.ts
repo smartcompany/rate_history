@@ -125,8 +125,16 @@ function dedupLatestStrategyByDate(strategyList: any[]) {
 }
 
 // Next.js API Route Handler
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    // Vercel Cron 여부 확인
+    const isVercelCron = request.headers.get('x-vercel-cron') !== null;
+    if (isVercelCron) {
+      console.log('[analyze-strategy] 🚀 Vercel Cron으로 실행됨');
+    } else {
+      console.log('[analyze-strategy] 일반 API 호출');
+    }
+
     // 1. 파일에서 기존 전략 읽기 (배열 형태)
     const fileRes = await fetch(strategyUrl, {
       headers: { apikey: SUPABASE_KEY }

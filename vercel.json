@@ -18,11 +18,11 @@
                 }
             ]
         }
-    ]
+    ],
     "$schema": "https://openapi.vercel.sh/vercel.json",
     "crons": [
         {
-            "path": "api/analyze-strategy",
+            "path": "/api/analyze-strategy",
             "schedule": "0 1 * * *"
         }
     ]
