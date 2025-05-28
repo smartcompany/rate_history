@@ -108,6 +108,22 @@ function isTodayOrFuture(dateStr: string) {
   return target >= today;
 }
 
+// strategyList에서 analysis_date가 같은 항목은 마지막 것만 남기기
+function dedupLatestStrategyByDate(strategyList: any[]) {
+  const seen = new Set<string>();
+  const result: any[] = [];
+  // 뒤에서부터 순회
+  for (let i = strategyList.length - 1; i >= 0; i--) {
+    const s = strategyList[i];
+    if (!s.analysis_date) continue;
+    if (!seen.has(s.analysis_date)) {
+      seen.add(s.analysis_date);
+      result.unshift(s); // 앞에 추가해서 원래 순서 유지
+    }
+  }
+  return result;
+}
+
 // Next.js API Route Handler
 export async function GET() {
   try {
@@ -168,7 +184,11 @@ export async function GET() {
 
     // 4. 배열 맨 앞에 추가 (최신이 맨 앞)
     strategyList.unshift(parsedStrategy);
-    const body = JSON.stringify(strategyList, null, 2)
+
+    // 중복 제거: 동일 날짜는 마지막(최신) 것만 남김
+    strategyList = dedupLatestStrategyByDate(strategyList);
+
+    const body = JSON.stringify(strategyList, null, 2);
 
     // 5. Supabase에 저장 (배열 전체)
     await fetch(strategyUploadUrl, {
