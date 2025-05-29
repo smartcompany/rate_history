@@ -73,7 +73,7 @@ async function saveRateHistory(data: any) {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`
     },
-    body: JSON.stringify(data)
+    body: JSON.stringify(data, null, 2) // 2칸 들여쓰기
   });
 
   if (!response.ok) {
@@ -148,7 +148,13 @@ export async function GET(request: Request) {
       await saveRateHistory(newHistory);
     }
 
-    return NextResponse.json(newHistory);
+    return new Response(
+      JSON.stringify(newHistory, null, 2), // 2칸 들여쓰기
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "환율 데이터를 처리하지 못했습니다." }, { status: 500 });

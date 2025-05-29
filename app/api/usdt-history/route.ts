@@ -54,7 +54,7 @@ async function saveUSDTPriceHistory(history: Record<string, { price: number; hig
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
     },
-    body: JSON.stringify(history),
+    body: JSON.stringify(history, null, 2),
   });
   if (!res.ok) {
     const errText = await res.text();
@@ -103,7 +103,13 @@ export async function GET(request: Request) {
     }
 
     // 날짜-가격 map 데이터 반환
-    return NextResponse.json(merged);
+    return new Response(
+      JSON.stringify(merged, null, 2), // 2칸 들여쓰기
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   } catch (err: any) {
     console.error(err);
     return NextResponse.json({ error: err.message }, { status: 500 });

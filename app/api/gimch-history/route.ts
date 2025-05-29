@@ -144,7 +144,7 @@ async function saveKimchiPremiumHistory(data: any) {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`
     },
-    body: JSON.stringify(data)
+    body: JSON.stringify(data, null, 2) // 2칸 들여쓰기
   });
 
   if (!response.ok) {
@@ -198,16 +198,34 @@ export async function GET(request: Request) {
         console.log('프리미엄 데이터 저장 완료:', Object.keys(sortedHistory).length);
 
         // 반환도 sortedHistory로!
-        return NextResponse.json(sortedHistory);
+        return new Response(
+          JSON.stringify(sortedHistory, null, 2), // 2칸 들여쓰기
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
       } else {
         console.log('유효한 프리미엄 데이터 없음');
-        return NextResponse.json(newHistory);
+        return new Response(
+          JSON.stringify(newHistory, null, 2), // 2칸 들여쓰기
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
       }
     } else {
       console.log('업데이트 필요 없음:', lastAvailableDate);
     }
 
-    return NextResponse.json(newHistory);
+    return new Response(
+      JSON.stringify(newHistory, null, 2), // 2칸 들여쓰기
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   } catch (err) {
     console.error('김치 프리미엄 처리 에러:', err);
     return NextResponse.json({ error: "김치 프리미엄 데이터를 처리하지 못했습니다." }, { status: 500 });
