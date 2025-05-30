@@ -113,13 +113,12 @@ function isTodayOrFuture(dateStr: string) {
 function dedupLatestStrategyByDate(strategyList: any[]) {
   const seen = new Set<string>();
   const result: any[] = [];
-  // 뒤에서부터 순회
-  for (let i = strategyList.length - 1; i >= 0; i--) {
-    const s = strategyList[i];
+  // 앞에서부터 순회 (최신이 맨 앞)
+  for (const s of strategyList) {
     if (!s.analysis_date) continue;
     if (!seen.has(s.analysis_date)) {
       seen.add(s.analysis_date);
-      result.unshift(s); // 앞에 추가해서 원래 순서 유지
+      result.push(s); // 뒤에 추가해서 최신이 남음
     }
   }
   return result;
@@ -207,6 +206,15 @@ export async function GET(request: Request) {
     }
 
     // 4. 배열 맨 앞에 추가 (최신이 맨 앞)
+    // analysis_date를 오늘 날짜로 강제 보정
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+    if (parsedStrategy && parsedStrategy.analysis_date && parsedStrategy.analysis_date !== todayStr) {
+      console.log(`[analyze-strategy] analysis_date 보정: ${parsedStrategy.analysis_date} → ${todayStr}`);
+      parsedStrategy.analysis_date = todayStr;
+    }
+
+    console.log('[analyze-strategy] parsedStrategy:', parsedStrategy); // ← 로그 추가
     strategyList.unshift(parsedStrategy);
 
     // 중복 제거: 동일 날짜는 마지막(최신) 것만 남김
