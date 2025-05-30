@@ -26,10 +26,11 @@ async function fetchUpbitUSDTByPage(count = 200) {
   if (!res.ok) throw new Error('Upbit USDT fetch failed');
   const data = await res.json();
 
-  // [{ date, price, high, low }, ...] 형태로 변환
+  // [{ date, open: close, high, low }, ...] 형태로 변환
   return data.map((item: any) => ({
     date: item.candle_date_time_utc.split('T')[0],
-    price: item.trade_price,
+    open: item.opening_price,
+    close: item.trade_price,
     high: item.high_price,
     low: item.low_price,
   }));
@@ -68,15 +69,23 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const days = Number(searchParams.get('days') || '1');
     const upbitData = await fetchUpbitUSDTByPage(days);
-    const newHistory: Record<string, { price: number; high: number; low: number }> = {};
+    let newHistory: Record<string, { 
+      open: number; 
+      close: number; 
+      high: number; 
+      low: number }> = {};
+      
     upbitData.forEach(item => {
       newHistory[item.date] = {
-        price: item.price,
+        open: item.open,
+        close: item.close,
         high: item.high,
         low: item.low,
       };
     });
 
+
+    /*
     // 기존 데이터와 비교하여 누락된 날짜만 저장
     const prevHistory = await getUSDTPriceHistory();
     const prevDates = Object.keys(prevHistory);
@@ -101,10 +110,11 @@ export async function GET(request: Request) {
       console.log('새로운 USDT 데이터 저장:', missingDates);
       merged = sorted;
     }
+    */
 
     // 날짜-가격 map 데이터 반환
     return new Response(
-      JSON.stringify(merged, null, 2), // 2칸 들여쓰기
+      JSON.stringify(newHistory, null, 2), // 2칸 들여쓰기
       {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
