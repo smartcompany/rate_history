@@ -66,7 +66,8 @@ USDT 값은 "날짜":{"price":종가,"high":최고가,"low":최저가} 로 되�
   "summary": "한 줄 요약"
 }
 
-향후 USDT를 얼마에 사서 얼마에 팔면 좋을지 판단해주고, 이 전략의 예상 수익률도 계산해서 위 JSON으로만 답변해줘.
+analysis_date는 반드시 오늘 날짜(YYYY-MM-DD)로만 작성해줘.
+USDT를 얼마에 사서 얼마에 팔면 좋을지 판단해주고, 이 전략의 예상 수익률도 계산해서 위 JSON으로만 답변해줘.
 summary에는 이렇게 가격을 판단한 근거에 대해 히스토리를 분석한 내용을 담아줘.
 `;
 
@@ -127,6 +128,15 @@ function dedupLatestStrategyByDate(strategyList: any[]) {
 // Next.js API Route Handler
 export async function GET(request: Request) {
   try {
+    // 쿼리 파라미터에서 shouldUpdate 확인
+    const url = new URL(request.url);
+    const shouldUpdateParam = url.searchParams.get('shouldUpdate');
+    let shouldUpdateOverride: boolean | undefined = undefined;
+    if (shouldUpdateParam !== null) {
+      // 'true', '1', 'yes' 등은 true로 간주
+      shouldUpdateOverride = ['true', '1', 'yes'].includes(shouldUpdateParam.toLowerCase());
+    }
+
     // Vercel Cron 여부 확인
     const isVercelCron = request.headers.get('x-vercel-cron') !== null;
     if (isVercelCron) {
@@ -160,6 +170,12 @@ export async function GET(request: Request) {
     if (latest && latest.analysis_date) {
       shouldUpdate = !isTodayOrFuture(latest.analysis_date);
       console.log('[analyze-strategy] shouldUpdate:', shouldUpdate, latest.analysis_date);
+    }
+
+    // 쿼리 파라미터로 강제 오버라이드
+    if (shouldUpdateOverride !== undefined) {
+      shouldUpdate = shouldUpdateOverride;
+      console.log('[analyze-strategy] shouldUpdate 파라미터 오버라이드:', shouldUpdate);
     }
 
     if (!shouldUpdate && latest) {
