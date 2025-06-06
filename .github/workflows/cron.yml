@@ -1,0 +1,15 @@
+# .github/workflows/cron.yml
+name: Hourly Cron Job
+
+on:
+  schedule:
+    - cron: '10 * * * *'  # 매시 정각 실행 (UTC 기준)
+  workflow_dispatch:      # 수동 실행도 가능하게 함
+
+jobs:
+  call-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send API request
+        run: |
+          curl -X GET https://rate-history.vercel.app/api/monitoring
