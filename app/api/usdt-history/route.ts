@@ -74,7 +74,7 @@ export async function GET(request: Request) {
       close: number; 
       high: number; 
       low: number }> = {};
-      
+
     upbitData.forEach(item => {
       newHistory[item.date] = {
         open: item.open,
@@ -84,21 +84,28 @@ export async function GET(request: Request) {
       };
     });
 
-
-    /*
     // 기존 데이터와 비교하여 누락된 날짜만 저장
     const prevHistory = await getUSDTPriceHistory();
     const prevDates = Object.keys(prevHistory);
     const newDates = Object.keys(newHistory);
     const missingDates = newDates.filter(date => !prevDates.includes(date));
 
-    let merged = prevHistory;
-    if (missingDates.length > 0) {
-      // 누락된 날짜가 있으면 저장
-      merged = { ...prevHistory, ...newHistory };
+    // ★★★ 최신 날짜는 항상 덮어쓰기
+    const latestDate = newDates.length > 0
+      ? newDates.sort().reverse()[0]
+      : null;
+    if (latestDate) {
+      // 기존에 있던 값도 최신값으로 덮어씀
+      prevHistory[latestDate] = newHistory[latestDate];
+      // 혹시 newHistory에만 있고 prevHistory에 없으면 이미 병합될 예정
+    }
+
+    if (missingDates.length > 0 || latestDate) {
+      // 누락된 날짜가 있거나, 최신 날짜를 덮어썼으면 저장
+      let merged = { ...prevHistory, ...newHistory };
 
       // 날짜 기준 내림차순 정렬
-      const sorted: Record<string, { price: number; high: number; low: number }> = {};
+      const sorted: Record<string, { price: number; high: number; low: number; open?: number; close?: number }> = {};
       Object.keys(merged)
         .sort()
         .reverse()
@@ -107,10 +114,8 @@ export async function GET(request: Request) {
         });
 
       await saveUSDTPriceHistory(sorted);
-      console.log('새로운 USDT 데이터 저장:', missingDates);
-      merged = sorted;
+      console.log('새로운 USDT 데이터 저장:', missingDates, '최신 날짜 덮어쓰기:', latestDate);
     }
-    */
 
     // 날짜-가격 map 데이터 반환
     return new Response(
