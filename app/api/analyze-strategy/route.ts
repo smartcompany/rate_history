@@ -7,12 +7,14 @@ const USDT_PATH = "usdt-history.json";
 const GIMCHI_PATH = "kimchi-premium.json";
 const USD_RATE_PATH = "rate-history.json";
 const STRATEGE_PATH = "analyze-strategy.json";
+const LOG_PATH = "vercel-logs.json";
 
 const usdtHistoryUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${USDT_PATH}`;
 const gimchHistoryUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${GIMCHI_PATH}`;
 const usdRateHistoryUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${USD_RATE_PATH}`;
 const strategyUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${STRATEGE_PATH}`;
 const strategyUploadUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${STRATEGE_PATH}`;
+const logUploadUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${LOG_PATH}`;
 
 // Supabase에서 USDT 히스토리 가져오기
 async function getUSDTPriceHistory() {
@@ -124,6 +126,26 @@ function dedupLatestStrategyByDate(strategyList: any[]) {
   return result;
 }
 
+// 로그를 Supabase Storage에 저장하는 함수
+async function uploadLogToSupabase(log: any) {
+  try {
+    await fetch(logUploadUrl, {
+      method: "PUT",
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`
+      },
+      body: JSON.stringify({
+        timestamp: new Date().toISOString(),
+        ...log,
+      }, null, 2),
+    });
+  } catch (e) {
+    console.error('[analyze-strategy] 로그 업로드 실패:', e);
+  }
+}
+
 // Next.js API Route Handler
 export async function GET(request: Request) {
   try {
@@ -136,13 +158,24 @@ export async function GET(request: Request) {
       shouldUpdateOverride = ['true', '1', 'yes'].includes(shouldUpdateParam.toLowerCase());
     }
 
-    // Vercel Cron 여부 확인
-    const isVercelCron = request.headers.get('x-vercel-cron') !== null;
+    // Vercel Cron 여부 확인 (user-agent에 vercel-cron 포함 여부로 변경)
+    const userAgent = request.headers.get('user-agent') || '';
+    const isVercelCron = userAgent.toLowerCase().includes('vercel-cron');
     if (isVercelCron) {
       console.log('[analyze-strategy] 🚀 Vercel Cron으로 실행됨');
+      
+      await uploadLogToSupabase({
+        event: isVercelCron ? 'vercel-cron' : 'api-call',
+        date: new Date().toISOString(),
+        userAgent,
+        url: request.url,
+      });
+      
     } else {
       console.log('[analyze-strategy] 일반 API 호출');
     }
+
+    console.log('[analyze-strategy] User-agent:', userAgent);
 
     // 1. 파일에서 기존 전략 읽기 (배열 형태)
     const fileRes = await fetch(strategyUrl, {
