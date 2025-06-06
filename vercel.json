@@ -24,10 +24,6 @@
         {
             "path": "/api/analyze-strategy",
             "schedule": "0 1 * * *"
-        },
-        {
-            "path": "/api/analyze-strategy",
-            "schedule": "50 7 * * *"
         }
     ]
 }
