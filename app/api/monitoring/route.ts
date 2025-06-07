@@ -1,14 +1,20 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { readFileSync } from 'fs';
+import { google } from 'googleapis';
+import path from 'path';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
 const STORAGE_BUCKET = "rate-history";
-const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY!; // 환경변수에 FCM 서버키 저장
-
 const STRATEGE_PATH = "analyze-strategy.json";
 const strategyUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${STRATEGE_PATH}`;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// 서비스 계정 키 파일 경로 (예: 프로젝트 루트에 service-account.json)
+const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), 'service-account.json');
+const serviceAccount = JSON.parse(readFileSync(SERVICE_ACCOUNT_PATH, 'utf8'));
+const PROJECT_ID = serviceAccount.project_id;
 
 export async function GET() {
   try {
@@ -79,7 +85,7 @@ export async function GET() {
   }
 }
 
-// FCM 푸시 전송 함수 구현 예시
+// FCM V1 푸시 전송 함수
 async function sendPushToUsers({ title, body, data }: { title: string, body: string, data: any }) {
   // 1. Supabase에서 fcm_tokens 테이블의 토큰 목록 조회
   const { data: tokensData, error } = await supabase
@@ -99,29 +105,56 @@ async function sendPushToUsers({ title, body, data }: { title: string, body: str
     return;
   }
 
-  // 2. FCM HTTP API로 POST 요청 (multicast)
-  const message = {
-    registration_ids: userTokens,
-    notification: {
-      title,
-      body,
-    },
-    data,
-  };
+  // 2. 서비스 계정으로 OAuth2 access_token 발급
+  const jwtClient = new google.auth.JWT({
+    email: serviceAccount.client_email,
+    key: serviceAccount.private_key,
+    scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+  });
+  
+  await jwtClient.authorize();
+  const accessToken = jwtClient.credentials.access_token;
 
-  try {
-    const res = await fetch('https://fcm.googleapis.com/fcm/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': `key=${FCM_SERVER_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(message),
-    });
-    const result = await res.json();
-    console.log('[FCM] 푸시 전송 결과:', result);
-  } catch (e) {
-    console.error('[FCM] 푸시 전송 실패:', e);
+  // 3. 여러명에게 반복 전송
+  for (const token of userTokens) {
+    const message = {
+      message: {
+        notification: {
+          title,
+          body,
+        },
+        data: Object.fromEntries(
+          Object.entries(data).map(([k, v]) => [k, String(v)])
+        ),
+        token,
+      }
+    };
+
+    try {
+      const res = await fetch(
+        `https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:send`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(message),
+        }
+      );
+      const result = await res.json();
+      // details가 있으면 JSON.stringify로 상세 출력
+      if (result?.error?.details) {
+        console.error(
+          `[FCM] V1 푸시 전송 결과 (token: ${token}):`,
+          JSON.stringify(result, null, 2)
+        );
+      } else {
+        console.log(`[FCM] V1 푸시 전송 결과 (token: ${token}):`, result);
+      }
+    } catch (e) {
+      console.error(`[FCM] V1 푸시 전송 실패 (token: ${token}):`, e);
+    }
   }
 }
 
