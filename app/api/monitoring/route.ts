@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
 const STORAGE_BUCKET = "rate-history";
+const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY!; // 환경변수에 FCM 서버키 저장
 
 const STRATEGE_PATH = "analyze-strategy.json";
 const strategyUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${STRATEGE_PATH}`;
@@ -54,6 +55,16 @@ export async function GET() {
       action = '매도';
     }
 
+    // 매수/매도 상태면 푸시 알림 전송
+    if (action === '매수' || action === '매도') {
+      // 예시: FCM 푸시 전송 함수 호출
+      await sendPushToUsers({
+        title: `USDT ${action} 시점 도달`,
+        body: `현재 USDT 가격: ${usdtPrice}원 (${action} 추천가: ${action === '매수' ? buyPrice : sellPrice}원)`,
+        data: { action, usdtPrice, buyPrice, sellPrice }
+      });
+    }
+
     return NextResponse.json({
       usdtPrice,
       buyPrice,
@@ -63,6 +74,44 @@ export async function GET() {
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+// FCM 푸시 전송 함수 구현 예시
+async function sendPushToUsers({ title, body, data }: { title: string, body: string, data: any }) {
+  // 1. DB에서 사용자 FCM 토큰 목록 조회 (여기서는 예시로 하드코딩)
+  // 실제로는 Supabase 등에서 토큰 목록을 불러와야 합니다.
+  const userTokens: string[] = [
+    // 'user_fcm_token1', 'user_fcm_token2', ...
+  ];
+  if (userTokens.length === 0) {
+    console.log('[FCM] 전송할 토큰이 없습니다.');
+    return;
+  }
+
+  // 2. FCM HTTP API로 POST 요청 (multicast)
+  const message = {
+    registration_ids: userTokens,
+    notification: {
+      title,
+      body,
+    },
+    data,
+  };
+
+  try {
+    const res = await fetch('https://fcm.googleapis.com/fcm/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `key=${FCM_SERVER_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+    const result = await res.json();
+    console.log('[FCM] 푸시 전송 결과:', result);
+  } catch (e) {
+    console.error('[FCM] 푸시 전송 실패:', e);
   }
 }
 
