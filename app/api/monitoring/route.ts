@@ -66,9 +66,10 @@ export async function GET() {
     // 매수/매도 상태면 푸시 알림 전송
     if (action === '매수' || action === '매도') {
       // 예시: FCM 푸시 전송 함수 호출
+      let body = `${action} 추천가: ${action === '매수' ? buyPrice : sellPrice}원\n현재 USDT 가격: ${usdtPrice}원`;
       await sendPushToUsers({
         title: `USDT ${action} 시점 도달`,
-        body: `현재 USDT 가격: ${usdtPrice}원 (${action} 추천가: ${action === '매수' ? buyPrice : sellPrice}원)`,
+        body: body,
         data: { action, usdtPrice, buyPrice, sellPrice }
       });
     }
