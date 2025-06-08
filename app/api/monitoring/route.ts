@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync } from 'fs';
 import { google } from 'googleapis';
-import path from 'path';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
@@ -11,9 +9,8 @@ const STRATEGE_PATH = "analyze-strategy.json";
 const strategyUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${STRATEGE_PATH}`;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// 서비스 계정 키 파일 경로 (예: 프로젝트 루트에 service-account.json)
-const SERVICE_ACCOUNT_PATH = path.join(process.cwd(), 'service-account.json');
-const serviceAccount = JSON.parse(readFileSync(SERVICE_ACCOUNT_PATH, 'utf8'));
+// 서비스 계정 키를 .env의 GOOGLE_CREDENTIALS에서 파싱
+const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS!);
 const PROJECT_ID = serviceAccount.project_id;
 
 export async function GET() {
@@ -147,7 +144,7 @@ async function sendPushToUsers({ title, body, data }: { title: string, body: str
       // details가 있으면 JSON.stringify로 상세 출력
       if (result?.error?.details) {
         console.error(
-          `[FCM] V1 푸시 전송 결과 (token: ${token}):`,
+          `[FCM] V1 푸시 전송 실패 (token: ${token}):`,
           JSON.stringify(result, null, 2)
         );
       } else {
