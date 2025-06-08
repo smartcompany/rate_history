@@ -147,6 +147,13 @@ async function sendPushToUsers({ title, body, data }: { title: string, body: str
           `[FCM] V1 푸시 전송 실패 (token: ${token}):`,
           JSON.stringify(result, null, 2)
         );
+        // 토큰 무효화 에러 처리
+        const errorCodes = (result.error.details as any[]).map(d => d.errorCode);
+        if (errorCodes.includes('UNREGISTERED') || errorCodes.includes('INVALID_ARGUMENT')) {
+          // DB에서 해당 토큰 삭제
+          await supabase.from('fcm_tokens').delete().eq('token', token);
+          console.log(`[FCM] 무효 토큰 삭제: ${token}`);
+        }
       } else {
         console.log(`[FCM] V1 푸시 전송 결과 (token: ${token}):`, result);
       }
