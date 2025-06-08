@@ -8,6 +8,7 @@ const GIMCHI_PATH = "kimchi-premium.json";
 const USD_RATE_PATH = "rate-history.json";
 const STRATEGE_PATH = "analyze-strategy.json";
 const LOG_PATH = "vercel-logs.json";
+const PROMPT_PATH = "analysis-prompt.txt";
 
 const usdtHistoryUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${USDT_PATH}`;
 const gimchHistoryUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${GIMCHI_PATH}`;
@@ -15,6 +16,7 @@ const usdRateHistoryUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BU
 const strategyUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${STRATEGE_PATH}`;
 const strategyUploadUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${STRATEGE_PATH}`;
 const logUploadUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${LOG_PATH}`;
+const promptUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${PROMPT_PATH}`;
 
 // Supabase에서 USDT 히스토리 가져오기
 async function getUSDTPriceHistory() {
@@ -44,34 +46,27 @@ async function getKimchiPremiumHistory() {
   return await response.json();
 }
 
+async function getPromptTemplate() {
+  const response = await fetch(promptUrl, {
+    headers: { apikey: SUPABASE_KEY }
+  });
+  if (!response.ok) throw new Error('Failed to fetch prompt template');
+  return await response.text();
+}
+
 // OpenAI API 호출 함수 (예시)
 async function requestStrategyFromChatGPT(usdtHistory: any, rateHistory: any, kimchiPremiumHistory: any) {
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
   const apiUrl = "https://api.openai.com/v1/chat/completions";
 
-  const prompt = `
-다음은 USDT, 환율, 김치 프리미엄의 일별 데이터입니다.
-각 데이터는 날짜별로 매핑된 JSON 형태입니다.
+  const promptTemplate = await getPromptTemplate();
+  const prompt = promptTemplate
+    .replace('{{usdtHistory}}', JSON.stringify(usdtHistory))
+    .replace('{{rateHistory}}', JSON.stringify(rateHistory))
+    .replace('{{kimchiPremiumHistory}}', JSON.stringify(kimchiPremiumHistory));
 
-USDT: ${JSON.stringify(usdtHistory)}
-환율: ${JSON.stringify(rateHistory)}
-김치 프리미엄: ${JSON.stringify(kimchiPremiumHistory)}
-
-USDT 값은 "날짜":{"price":종가,"high":최고가,"low":최저가} 로 되어 있어 이 3개의 내용을 분석해서 
-아래와 같은 JSON 형태로만, 마크다운 코드블록(백틱 등) 없이 답변해줘.
-
-{
-  "analysis_date": (매매 분석 날짜, YYYY-MM-DD),
-  "buy_price": (구매 추천 가격, 숫자),
-  "sell_price": (판매 추천 가격, 숫자),
-  "expected_return": (예상 수익률, % 단위 숫자),
-  "summary": "한 줄 요약"
-}
-
-analysis_date는 반드시 오늘 날짜(YYYY-MM-DD)로만 작성해줘.
-USDT를 얼마에 사서 얼마에 팔면 좋을지 판단해주고, 이 전략의 예상 수익률도 계산해서 위 JSON으로만 답변해줘.
-summary에는 이렇게 가격을 판단한 근거에 대해 히스토리를 분석한 내용을 담아줘.
-`;
+  // 프롬프트 로깅
+  console.log('[analyze-strategy] ChatGPT 프롬프트:', prompt);
 
   const body = {
     model: "gpt-4o",
