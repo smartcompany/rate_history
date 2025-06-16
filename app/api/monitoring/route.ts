@@ -170,7 +170,7 @@ async function sendPushMessagesIfneeded(latestStrategy: any, usdtPrice: any, lat
           console.log(`[FCM] 무효 토큰 삭제: ${token}`);
         }
       } else {
-        console.log(`[FCM] V1 푸시 전송 결과 (token: ${token}):`, result);
+        console.log(`[FCM] V1 푸시 전송 결과 (token: ${token}):`, '\n전송 메시지:', JSON.stringify(message, null, 2)); // 메시지 로깅 추가
       }
     } catch (e) {
       console.error(`[FCM] V1 푸시 전송 실패 (token: ${token}):`, e);
