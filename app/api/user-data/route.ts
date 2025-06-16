@@ -23,7 +23,8 @@ export async function POST(req: Request) {
           user_id: userId,
           user_data: userData,
           updated_at: new Date().toISOString() 
-        }
+        },
+        { onConflict: 'user_id' } // 이 부분 추가!
       )
       .select();
 
