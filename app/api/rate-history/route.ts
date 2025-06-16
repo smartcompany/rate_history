@@ -99,8 +99,13 @@ export async function GET(request: Request) {
     const lastAvailableDate = Object.keys(rateHistory).sort().pop();
 
     console.log(`lastAvailableDate: ${lastAvailableDate}`);
+    let lastDate = new Date(lastAvailableDate);
+    let todayDate = new Date(today);
 
-    if (!lastAvailableDate || new Date(lastAvailableDate) < new Date(today)) {
+    console.log(`lastDate: ${lastDate}`);
+    console.log(`todayDate: ${todayDate}`);
+
+    if (!lastAvailableDate || lastDate < todayDate) {
       let missingDates: string[] = [];
       let page = 1;
       let done = false;
@@ -145,6 +150,18 @@ export async function GET(request: Request) {
         });
       newHistory = sortedHistory;
 
+      await saveRateHistory(newHistory);
+    } else if (lastDate.getTime() === todayDate.getTime()) {
+      // 오늘 날짜 환율이 이미 존재 하지만 새로 갱신된 것을 쓰기 위해서 받아서 갱신한다 
+      const rates = await fetchRateByPage(1);
+      console.log(`오늘 날짜 환율 갱신을 위한 첫 페이지 가져오기:`, rates);
+      for (const { date, rate } of rates) {
+        if (date === today) {
+          newHistory[date] = rate;
+          console.log(`오늘 날짜 환율 갱신: ${date} = ${rate}`);
+          break; // 오늘 날짜만 갱신
+        }
+      }
       await saveRateHistory(newHistory);
     }
 
