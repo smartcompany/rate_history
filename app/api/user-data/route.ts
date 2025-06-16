@@ -18,7 +18,7 @@ export async function POST(req: Request) {
 
     const { data, error } = await supabase
       .from('fcm_tokens')
-      .update({ user_data: userData, updated_at: new Date().toISOString() })
+      .upsert({ user_data: userData, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
       .select();
 
