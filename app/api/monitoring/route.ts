@@ -202,8 +202,9 @@ function makeBody(latestStrategy: any, usdtPrice: any, latestExchangeRate: any, 
     } else if (userData.pushType === 'kimchi') {
       logic = '김치 프리미엄 분석';
       // 김치 프리미엄 푸시 전송 로직
-      const buyPercent = Number(userData.gimchiBuyPercent);
-      const sellPercent = Number(userData.gimchiSellPercent);
+      
+      const buyPercent = Number(userData.gimchiBuyPercent ?? 1.0);
+      const sellPercent = Number(userData.gimchiSellPercent ?? 3.0);
       const kimchiBuyPrice = Number((latestExchangeRate * (1 + buyPercent / 100)).toFixed(1));
       const kimchiSellPrice = Number((latestExchangeRate * (1 + sellPercent / 100)).toFixed(1));
 
