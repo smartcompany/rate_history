@@ -85,7 +85,18 @@ async function saveRateHistory(data: any) {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const days = Number(searchParams.get('days') || '1');
+  const days = Number(searchParams.get('days') || '0');
+
+  if (days == 0) {
+    const rates = await fetchRateByPage(1);
+    return new Response(
+      JSON.stringify(rates, null, 2), // 2칸 들여쓰기
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
 
   const today = formatDate(new Date());
   const sinceDate = formatDate(getDateNDaysAgo(days));
