@@ -88,9 +88,14 @@ export async function GET(request: Request) {
   const days = Number(searchParams.get('days') || '0');
 
   if (days == 0) {
+    let history = {};
     const rates = await fetchRateByPage(1);
+    for (const { date, rate } of rates) {
+      history[date] = rate;
+    }
+    
     return new Response(
-      JSON.stringify(rates, null, 2), // 2칸 들여쓰기
+      JSON.stringify(history, null, 2), // 2칸 들여쓰기
       {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
