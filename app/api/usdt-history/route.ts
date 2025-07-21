@@ -67,8 +67,30 @@ async function saveUSDTPriceHistory(history: Record<string, { price: number; hig
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const days = Number(searchParams.get('days') || '1');
-    const upbitData = await fetchUpbitUSDTByPage(days);
+    const daysParam = searchParams.get('days');
+
+    let days = 1;
+    if (daysParam === 'all') {
+      days = 200;
+    } else {
+      days = Number(daysParam) || 1;
+    }
+
+    // 기존 데이터와 비교하여 누락된 날짜만 저장
+    const prevHistory = await getUSDTPriceHistory();
+    const prevDates = Object.keys(prevHistory);
+    const prevLatestDateStr = prevDates.length > 0 ? prevDates.sort().reverse()[0] : null;
+    const today = new Date();
+    const prevLatestDate = new Date(prevLatestDateStr);
+    const diffTime = today.getTime() - prevLatestDate.getTime();
+    const diffDays = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+    console.log('[DEBUG] prevLatestDateStr:', prevLatestDateStr);
+    console.log('[DEBUG] today:', formatDate(today));
+    console.log('[DEBUG] diffDays:', diffDays);
+    console.log('[DEBUG] daysParam:', daysParam, 'days:', days);
+
+    const upbitData = await fetchUpbitUSDTByPage(diffDays);
+    console.log('[DEBUG] upbitData.length:', upbitData.length);
     let newHistory: Record<string, { 
       open: number; 
       close: number; 
@@ -83,48 +105,45 @@ export async function GET(request: Request) {
         low: item.low,
       };
     });
+    console.log('[DEBUG] newHistory keys:', Object.keys(newHistory));
 
-    // 기존 데이터와 비교하여 누락된 날짜만 저장
-    const prevHistory = await getUSDTPriceHistory();
-    const prevDates = Object.keys(prevHistory);
-    const newDates = Object.keys(newHistory);
-    const missingDates = newDates.filter(date => !prevDates.includes(date));
+    let merged = { ...prevHistory, ...newHistory };
 
-    // ★★★ 최신 날짜는 항상 덮어쓰기
-    const latestDate = newDates.length > 0
-      ? newDates.sort().reverse()[0]
-      : null;
-    if (latestDate) {
-      // 기존에 있던 값도 최신값으로 덮어씀
-      prevHistory[latestDate] = newHistory[latestDate];
-      // 혹시 newHistory에만 있고 prevHistory에 없으면 이미 병합될 예정
+    // 날짜 기준 내림차순 정렬
+    const sorted: Record<string, { price: number; high: number; low: number; open?: number; close?: number }> = {};
+    Object.keys(merged)
+      .sort()
+      .reverse()
+      .forEach(date => {
+        sorted[date] = merged[date];
+      });
+    console.log('[DEBUG] sorted keys:', Object.keys(sorted));
+
+    await saveUSDTPriceHistory(sorted);
+
+    if (daysParam === 'all') {
+      return new Response(
+        JSON.stringify(sorted, null, 2),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    } else {
+      // 요청한 days 만큼 날짜(key)를 유지한 객체로 반환
+      const slicedKeys = Object.keys(sorted).slice(0, days);
+      const slicedSorted: typeof sorted = {};
+      slicedKeys.forEach(date => {
+        slicedSorted[date] = sorted[date];
+      });
+      return new Response(
+        JSON.stringify(slicedSorted, null, 2),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
-
-    if (missingDates.length > 0 || latestDate) {
-      // 누락된 날짜가 있거나, 최신 날짜를 덮어썼으면 저장
-      let merged = { ...prevHistory, ...newHistory };
-
-      // 날짜 기준 내림차순 정렬
-      const sorted: Record<string, { price: number; high: number; low: number; open?: number; close?: number }> = {};
-      Object.keys(merged)
-        .sort()
-        .reverse()
-        .forEach(date => {
-          sorted[date] = merged[date];
-        });
-
-      await saveUSDTPriceHistory(sorted);
-      console.log('새로운 USDT 데이터 저장:', missingDates, '최신 날짜 덮어쓰기:', latestDate);
-    }
-
-    // 날짜-가격 map 데이터 반환
-    return new Response(
-      JSON.stringify(newHistory, null, 2), // 2칸 들여쓰기
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
   } catch (err: any) {
     console.error(err);
     return NextResponse.json({ error: err.message }, { status: 500 });
