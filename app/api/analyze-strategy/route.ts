@@ -69,12 +69,12 @@ async function requestStrategyFromChatGPT(usdtHistory: any, rateHistory: any, ki
   console.log('[analyze-strategy] ChatGPT 프롬프트:', prompt);
 
   const body = {
-    model: "gpt-4o",
+    model: "gpt-5-mini",
     messages: [
       { role: "system", content: "당신은 투자 전략 분석 전문가입니다." },
       { role: "user", content: prompt }
     ],
-    max_tokens: 1000,
+    max_completion_tokens: 1000,
     temperature: 0.7,
   };
 
