@@ -74,8 +74,7 @@ async function requestStrategyFromChatGPT(usdtHistory: any, rateHistory: any, ki
       { role: "system", content: "당신은 투자 전략 분석 전문가입니다." },
       { role: "user", content: prompt }
     ],
-    max_completion_tokens: 1000,
-    temperature: 0.7,
+    max_completion_tokens: 1000
   };
 
   const response = await fetch(apiUrl, {
