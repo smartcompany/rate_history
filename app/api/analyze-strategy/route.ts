@@ -95,14 +95,11 @@ async function requestStrategyFromChatGPT(usdtHistory: any, rateHistory: any, ki
   return data.choices?.[0]?.message?.content ?? "분석 결과를 가져오지 못했습니다.";
 }
 
-// 날짜 비교 함수
+// 날짜 비교 함수 (문자열 비교로 시간대 문제 해결)
 function isTodayOrFuture(dateStr: string) {
   const today = new Date();
-  const target = new Date(dateStr);
-  // 오늘 날짜(시분초 제거)
-  today.setHours(0, 0, 0, 0);
-  target.setHours(0, 0, 0, 0);
-  return target >= today;
+  const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD
+  return dateStr >= todayStr;
 }
 
 // strategyList에서 analysis_date가 같은 항목은 마지막 것만 남기기
