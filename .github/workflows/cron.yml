@@ -15,7 +15,8 @@ jobs:
       
       - name: Update strategy (if needed)
         run: |
-          curl -X GET https://usdt-signal.vercel.app/api/analyze-strategy-cron \
+          # 일단 로컬 테스트용 - 실제 배포 후 올바른 URL로 변경 필요
+          curl -X GET https://rate-history.vercel.app/api/analyze-strategy-cron \
             -H "Content-Type: application/json" \
             -H "User-Agent: github-actions-cron" \
-            --fail-with-body
+            --fail-with-body || echo "Strategy API not available yet"
