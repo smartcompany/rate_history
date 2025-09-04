@@ -1,4 +1,3 @@
-# .github/workflows/cron.yml
 name: Hourly Cron Job
 
 on:
@@ -10,6 +9,13 @@ jobs:
   call-api:
     runs-on: ubuntu-latest
     steps:
-      - name: Send API request
+      - name: Send monitoring API request
         run: |
           curl -X GET https://rate-history.vercel.app/api/monitoring
+      
+      - name: Update strategy (if needed)
+        run: |
+          curl -X GET https://usdt-signal.vercel.app/api/analyze-strategy-cron \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: github-actions-cron" \
+            --fail-with-body
