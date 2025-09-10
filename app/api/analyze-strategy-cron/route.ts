@@ -21,7 +21,7 @@ const gimchPremiumTrendUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE
 const gimchPremiumTrendUploadUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${GIMCH_PREMIUM_TREND_PATH}`;
 
 // Supabase에서 USDT 히스토리 가져오기
-async function getUSDTPriceHistory() {
+async function getUSDTPriceHistory(): Promise<Record<string, any>>  {
   const response = await fetch(usdtHistoryUrl, {
     headers: { apikey: SUPABASE_KEY }
   });
@@ -30,7 +30,7 @@ async function getUSDTPriceHistory() {
   return await response.json();
 }
 
-async function getRateHistory(days: number) {
+async function getRateHistory(days: number): Promise<Record<string, number>> {
   const daysParam = `days=${days}`;
   console.log('[getRateHistory] API URL: https://rate-history.vercel.app/api/rate-history?' + daysParam);
   const response = await fetch('https://rate-history.vercel.app/api/rate-history?' + daysParam);
@@ -38,9 +38,10 @@ async function getRateHistory(days: number) {
   console.log('[getRateHistory] Response status:', response.status);
   if (!response.ok) throw new Error('Failed to fetch rate history from API');
   
-  const data = await response.json();
-  console.log('[getRateHistory] Data keys count:', Object.keys(data).length);
-  return data;
+  const parsed = await response.json() as Record<string, number>;
+
+  console.log('[getRateHistory] Data keys count:', Object.keys(parsed).length);
+  return parsed;
 }
 
 async function getKimchiPremiumHistory() {
@@ -123,129 +124,89 @@ function dedupLatestStrategyByDate(strategyList: any[]) {
   return result;
 }
 
-// 김치 프리미엄 트렌드 계산 함수 (monitoring API와 동일)
-function generatePremiumTrends(rateHistory: any, usdtHistory: any): Record<string, any> {
+// 김치 프리미엄 트렌드 계산 함수 (단일 패스, 날짜 정렬/정합 처리)
+function generatePremiumTrends(rateHistory: Record<string, number>, usdtHistory: Record<string, any>): Record<string, any> {
   const trends: Record<string, any> = {};
   const baseBuyThreshold = 0.5;
   const baseSellThreshold = 2.5;
-  
+
   console.log('[generatePremiumTrends] rateHistory keys:', Object.keys(rateHistory).length);
   console.log('[generatePremiumTrends] usdtHistory keys:', Object.keys(usdtHistory).length);
-  
-  // 환율 데이터를 날짜별로 정렬
-  const sortedRates = Object.entries(rateHistory)
-    .map(([date, rate]) => ({ date: new Date(date), rate: Number(rate) }))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
-  
-  // USDT 데이터를 날짜별로 정렬
-  const sortedUsdt = Object.entries(usdtHistory)
-    .map(([date, data]) => ({ 
-      date: new Date(date), 
-      price: Number((data as any).price || data) 
-    }))
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
-  
-  console.log('[generatePremiumTrends] sortedRates length:', sortedRates.length);
-  console.log('[generatePremiumTrends] sortedUsdt length:', sortedUsdt.length);
-  
-  // 5일 이동평균 윈도우
+
+  // 공통 날짜 교집합을 오름차순 정렬
+  const commonDates = Object.keys(rateHistory)
+    .filter(d => usdtHistory[d] !== undefined)
+    .sort();
+
   const windowSize = 5;
-  
-  console.log('[generatePremiumTrends] Starting loop, sortedRates.length:', sortedRates.length, 'windowSize:', windowSize);
-  
-  // USDT 데이터가 있는 마지막 날짜까지만 계산
-  const maxUsdtDate = sortedUsdt[sortedUsdt.length - 1]?.date;
-  const maxUsdtIndex = sortedRates.findIndex(rate => rate.date > maxUsdtDate);
-  const endIndex = maxUsdtIndex > 0 ? maxUsdtIndex : sortedRates.length;
-  
-  console.log('[generatePremiumTrends] USDT 데이터 마지막 날짜:', maxUsdtDate?.toISOString().split('T')[0]);
-  console.log('[generatePremiumTrends] 계산할 마지막 인덱스:', endIndex);
-  
-  for (let i = windowSize - 1; i < endIndex; i++) {
-    const currentDate = sortedRates[i].date;
-    const dateKey = currentDate.toISOString().split('T')[0];
-    
-    // 5일 윈도우의 환율과 USDT 데이터 수집
-    const rateWindow = sortedRates.slice(i - windowSize + 1, i + 1);
-    const usdtWindow = sortedUsdt.slice(i - windowSize + 1, i + 1);
-    
-    if (rateWindow.length < windowSize || usdtWindow.length < windowSize) {
-      console.log('[generatePremiumTrends] Skipping', dateKey, 'insufficient data:', rateWindow.length, usdtWindow.length);
-      continue;
+  console.log('[generatePremiumTrends] Starting loop, dates:', commonDates.length, 'windowSize:', windowSize);
+
+  // 슬라이딩 윈도우(현재/이전) 합과 개수 관리로 O(n) 계산
+  const values: (number | null)[] = [];
+  const curWindow: (number | null)[] = [];
+  const prevWindow: (number | null)[] = [];
+  let curSum = 0, curCount = 0;
+  let prevSum = 0, prevCount = 0;
+
+  for (let i = 0; i < commonDates.length; i++) {
+    const dateKey = commonDates[i];
+    const rate = rateHistory[dateKey];
+    const usdtData = usdtHistory[dateKey];
+    const usdt = (usdtData as any)?.close ?? (usdtData as any)?.price ?? usdtData;
+    const val = (rate > 0 && usdt > 0) ? ((usdt - rate) / rate) * 100 : null;
+    values.push(val);
+
+    // 현재 윈도우 갱신
+    curWindow.push(val);
+    if (val != null) { curSum += val; curCount++; }
+    if (curWindow.length > windowSize) {
+      const out = curWindow.shift();
+      if (out != null) { curSum -= out; curCount--; }
     }
-    
-    // 김치 프리미엄 계산 (5일 평균)
-    let kimchiSum = 0;
-    let validDays = 0;
-    
-    for (let j = 0; j < windowSize; j++) {
-      const rate = rateWindow[j].rate;
-      const usdtPrice = usdtWindow[j].price;
-      
-      if (rate > 0 && usdtPrice > 0) {
-        const kimchiPremium = ((usdtPrice - rate) / rate) * 100;
-        kimchiSum += kimchiPremium;
-        validDays++;
+
+    // 이전 윈도우 갱신 (현재 인덱스에서 windowSize만큼 뒤의 값을 사용)
+    if (i - windowSize >= 0) {
+      const prevValToAdd = values[i - windowSize];
+      prevWindow.push(prevValToAdd);
+      if (prevValToAdd != null) { prevSum += prevValToAdd; prevCount++; }
+      if (prevWindow.length > windowSize) {
+        const prevOut = prevWindow.shift();
+        if (prevOut != null) { prevSum -= prevOut; prevCount--; }
       }
     }
-    
-    if (validDays === 0) continue;
-    
-    const kimchiMA5 = kimchiSum / validDays;
-    
-    // 트렌드 계산 (이전 5일 대비 현재 5일)
-    let kimchiTrend = 0;
-    if (i >= windowSize * 2 - 1) {
-      const prevWindow = sortedRates.slice(i - windowSize * 2 + 1, i - windowSize + 1);
-      const prevUsdtWindow = sortedUsdt.slice(i - windowSize * 2 + 1, i - windowSize + 1);
-      
-      let prevKimchiSum = 0;
-      let prevValidDays = 0;
-      
-      for (let j = 0; j < windowSize; j++) {
-        const rate = prevWindow[j].rate;
-        const usdtPrice = prevUsdtWindow[j].price;
-        
-        if (rate > 0 && usdtPrice > 0) {
-          const kimchiPremium = ((usdtPrice - rate) / rate) * 100;
-          prevKimchiSum += kimchiPremium;
-          prevValidDays++;
-        }
+
+    // MA5 계산 가능 시점부터 결과 산출
+    if (curWindow.length === windowSize) {
+      const kimchiMA5 = curCount > 0 ? (curSum / curCount) : 0;
+      let kimchiTrend = 0;
+      if (prevWindow.length === windowSize && prevCount > 0) {
+        const prevMA5 = prevSum / prevCount;
+        kimchiTrend = kimchiMA5 - prevMA5;
       }
-      
-      if (prevValidDays > 0) {
-        const prevKimchiMA5 = prevKimchiSum / prevValidDays;
-        kimchiTrend = kimchiMA5 - prevKimchiMA5;
-      }
+
+      const buyThreshold = calculateAdjustedThreshold(
+        baseBuyThreshold,
+        kimchiTrend,
+        true,
+        kimchiMA5
+      );
+
+      const sellThreshold = calculateAdjustedThreshold(
+        baseSellThreshold,
+        kimchiTrend,
+        false,
+        kimchiMA5
+      );
+
+      trends[dateKey] = {
+        buy_threshold: buyThreshold,
+        sell_threshold: sellThreshold,
+        kimchi_trend: kimchiTrend,
+        kimchi_ma5: kimchiMA5
+      };
     }
-    
-    // 조정된 임계값 계산
-    const buyThreshold = calculateAdjustedThreshold(
-      baseBuyThreshold,
-      kimchiTrend,
-      0, // exchangeRateTrend (사용하지 않음)
-      0, // usdtTrend (사용하지 않음)
-      true, // isBuyThreshold
-      kimchiMA5
-    );
-    
-    const sellThreshold = calculateAdjustedThreshold(
-      baseSellThreshold,
-      kimchiTrend,
-      0, // exchangeRateTrend (사용하지 않음)
-      0, // usdtTrend (사용하지 않음)
-      false, // isBuyThreshold
-      kimchiMA5
-    );
-    
-    trends[dateKey] = {
-      buy_threshold: buyThreshold,
-      sell_threshold: sellThreshold,
-      kimchi_trend: kimchiTrend,
-      kimchi_ma5: kimchiMA5
-    };
   }
-  
+
   return trends;
 }
 
@@ -253,8 +214,6 @@ function generatePremiumTrends(rateHistory: any, usdtHistory: any): Record<strin
 function calculateAdjustedThreshold(
   baseThreshold: number,
   kimchiTrend: number,
-  exchangeRateTrend: number, // 사용하지 않음
-  usdtTrend: number,         // 사용하지 않음
   isBuyThreshold: boolean,
   kimchiMA5: number
 ): number {
@@ -392,7 +351,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
-async function setupKPremiumTrends(rateHistory: any, usdtHistory: any) {
+async function setupKPremiumTrends(rateHistory: Record<string, number>, usdtHistory: Record<string, any>) {
   console.log('[analyze-strategy-cron] 김치 프리미엄 트렌드 계산 시작');
   console.log('[analyze-strategy-cron] rateHistory keys:', Object.keys(rateHistory).length);
   console.log('[analyze-strategy-cron] usdtHistory keys:', Object.keys(usdtHistory).length);
