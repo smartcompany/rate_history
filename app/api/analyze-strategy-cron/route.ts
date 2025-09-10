@@ -30,25 +30,17 @@ async function getUSDTPriceHistory() {
   return await response.json();
 }
 
-async function getRateHistory() {
-  console.log('[getRateHistory] API URL: https://rate-history.vercel.app/api/rate-history?days=200');
-  try {
-    const response = await fetch('https://rate-history.vercel.app/api/rate-history?days=200');
+async function getRateHistory(days: number) {
+  const daysParam = `days=${days}`;
+  console.log('[getRateHistory] API URL: https://rate-history.vercel.app/api/rate-history?' + daysParam);
+  const response = await fetch('https://rate-history.vercel.app/api/rate-history?' + daysParam);
 
-    console.log('[getRateHistory] Response status:', response.status);
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[getRateHistory] Error response:', errorText);
-      throw new Error(`Failed to fetch rate history from API: ${response.status} ${errorText}`);
-    }
-    
-    const data = await response.json();
-    console.log('[getRateHistory] Data keys count:', Object.keys(data).length);
-    return data;
-  } catch (error) {
-    console.error('[getRateHistory] Fetch error:', error);
-    throw error;
-  }
+  console.log('[getRateHistory] Response status:', response.status);
+  if (!response.ok) throw new Error('Failed to fetch rate history from API');
+  
+  const data = await response.json();
+  console.log('[getRateHistory] Data keys count:', Object.keys(data).length);
+  return data;
 }
 
 async function getKimchiPremiumHistory() {
@@ -324,9 +316,15 @@ export async function GET(request: Request) {
     console.log(`[analyze-strategy-cron] UTC 오늘: ${todayStr}, 한국 오늘: ${koreaTodayStr}`);
 
     console.log('usdtHistory, rateHistory, kimchiPremiumHistory 가져오기 시작');
-    const [usdtHistory, rateHistory, kimchiPremiumHistory] = await Promise.all([
-      getUSDTPriceHistory(),
-      getRateHistory(),
+    
+    // 먼저 USDT 데이터를 가져와서 개수 확인
+    const usdtHistory = await getUSDTPriceHistory();
+    const usdtCount = Object.keys(usdtHistory).length;
+    console.log('[analyze-strategy-cron] USDT 데이터 개수:', usdtCount);
+    
+    // USDT 개수만큼 환율 데이터 가져오기
+    const [rateHistory, kimchiPremiumHistory] = await Promise.all([
+      getRateHistory(usdtCount),
       getKimchiPremiumHistory(),
     ]);
  
