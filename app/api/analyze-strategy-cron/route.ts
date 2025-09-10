@@ -291,6 +291,15 @@ export async function GET(request: Request) {
     const koreaTodayStr = koreaToday.toISOString().slice(0, 10);
     
     console.log(`[analyze-strategy-cron] UTC 오늘: ${todayStr}, 한국 오늘: ${koreaTodayStr}`);
+
+    console.log('usdtHistory, rateHistory, kimchiPremiumHistory 가져오기 시작');
+    const [usdtHistory, rateHistory, kimchiPremiumHistory] = await Promise.all([
+      getUSDTPriceHistory(),
+      getRateHistory(),
+      getKimchiPremiumHistory(),
+    ]);
+ 
+    await setupKPremiumTrends(rateHistory, usdtHistory);
     
     const latest = strategyList[0];
     if (latest && latest.analysis_date) {
@@ -306,14 +315,6 @@ export async function GET(request: Request) {
         }, { status: 200 });
       }
     }
-
-    // 3. 새로운 전략 생성
-    console.log('[analyze-strategy-cron] 새로운 전략 생성 시작');
-    const [usdtHistory, rateHistory, kimchiPremiumHistory] = await Promise.all([
-      getUSDTPriceHistory(),
-      getRateHistory(),
-      getKimchiPremiumHistory(),
-    ]);
 
     const strategy = await requestStrategyFromChatGPT(usdtHistory, rateHistory, kimchiPremiumHistory);
     let parsedStrategy: any;
@@ -351,29 +352,6 @@ export async function GET(request: Request) {
 
     console.log('[analyze-strategy-cron] 전략 업데이트 완료:', strategyList.length);
 
-    // 6. 김치 프리미엄 트렌드 데이터 계산 및 저장
-    console.log('[analyze-strategy-cron] 김치 프리미엄 트렌드 계산 시작');
-    try {
-      const kimchiTrends = generatePremiumTrends(rateHistory, usdtHistory);
-      
-      // Supabase에 김치 프리미엄 트렌드 데이터 저장
-      const trendBody = JSON.stringify(kimchiTrends, null, 2);
-      await fetch(gimchPremiumTrendUploadUrl, {
-        method: "PUT",
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`
-        },
-        body: trendBody
-      });
-      
-      console.log('[analyze-strategy-cron] 김치 프리미엄 트렌드 업데이트 완료:', Object.keys(kimchiTrends).length, '일');
-    } catch (trendError) {
-      console.error('[analyze-strategy-cron] 김치 프리미엄 트렌드 계산 실패:', trendError);
-      // 트렌드 계산 실패해도 전략 업데이트는 성공으로 처리
-    }
-
     return NextResponse.json({ 
       message: '전략이 성공적으로 업데이트되었습니다.', 
       new_strategy: parsedStrategy,
@@ -385,3 +363,27 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+async function setupKPremiumTrends(rateHistory: any, usdtHistory: any) {
+  console.log('[analyze-strategy-cron] 김치 프리미엄 트렌드 계산 시작');
+  try {
+    const kimchiTrends = generatePremiumTrends(rateHistory, usdtHistory);
+
+    // Supabase에 김치 프리미엄 트렌드 데이터 저장
+    const trendBody = JSON.stringify(kimchiTrends, null, 2);
+    await fetch(gimchPremiumTrendUploadUrl, {
+      method: "PUT",
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`
+      },
+      body: trendBody
+    });
+
+    console.log('[analyze-strategy-cron] 김치 프리미엄 트렌드 업데이트 완료:', Object.keys(kimchiTrends).length, '일');
+  } catch (trendError) {
+    console.error('[analyze-strategy-cron] 김치 프리미엄 트렌드 계산 실패:', trendError);
+    // 트렌드 계산 실패해도 전략 업데이트는 성공으로 처리
+  }
+}
+
