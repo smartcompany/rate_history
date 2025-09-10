@@ -31,13 +31,11 @@ async function getUSDTPriceHistory() {
 }
 
 async function getRateHistory() {
-  console.log('[getRateHistory] URL:', usdRateHistoryUrl);
-  const response = await fetch(usdRateHistoryUrl, {
-    headers: { apikey: SUPABASE_KEY }
-  });
+  console.log('[getRateHistory] API URL: https://rate-history.vercel.app/api/rate-history?days=all');
+  const response = await fetch('https://rate-history.vercel.app/api/rate-history?days=all');
 
   console.log('[getRateHistory] Response status:', response.status);
-  if (!response.ok) throw new Error('Failed to fetch JSON from Supabase');
+  if (!response.ok) throw new Error('Failed to fetch rate history from API');
   
   const data = await response.json();
   console.log('[getRateHistory] Data keys count:', Object.keys(data).length);
@@ -389,12 +387,18 @@ export async function GET(request: Request) {
 }
 async function setupKPremiumTrends(rateHistory: any, usdtHistory: any) {
   console.log('[analyze-strategy-cron] 김치 프리미엄 트렌드 계산 시작');
+  console.log('[analyze-strategy-cron] rateHistory keys:', Object.keys(rateHistory).length);
+  console.log('[analyze-strategy-cron] usdtHistory keys:', Object.keys(usdtHistory).length);
+  
   try {
     const kimchiTrends = generatePremiumTrends(rateHistory, usdtHistory);
+    console.log('[analyze-strategy-cron] generatePremiumTrends 결과:', Object.keys(kimchiTrends).length, '일');
 
     // Supabase에 김치 프리미엄 트렌드 데이터 저장
     const trendBody = JSON.stringify(kimchiTrends, null, 2);
-    await fetch(gimchPremiumTrendUploadUrl, {
+    console.log('[analyze-strategy-cron] 저장할 데이터 크기:', trendBody.length, 'bytes');
+    
+    const uploadResponse = await fetch(gimchPremiumTrendUploadUrl, {
       method: "PUT",
       headers: {
         'Content-Type': 'application/json',
@@ -403,6 +407,8 @@ async function setupKPremiumTrends(rateHistory: any, usdtHistory: any) {
       },
       body: trendBody
     });
+    
+    console.log('[analyze-strategy-cron] Supabase 업로드 응답:', uploadResponse.status, uploadResponse.statusText);
 
     console.log('[analyze-strategy-cron] 김치 프리미엄 트렌드 업데이트 완료:', Object.keys(kimchiTrends).length, '일');
   } catch (trendError) {
