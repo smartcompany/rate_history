@@ -7,11 +7,16 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 export async function POST(req: Request) {
   try {
-    const { token, platform, userId } = await req.json();
+    const { token, platform, userId, useTrend } = await req.json();
 
     if (!token || !platform) {
       return NextResponse.json({ error: 'token, platform 필수' }, { status: 400 });
     }
+
+    // user_data 객체 생성
+    const userData = {
+      useTrend: useTrend ?? false
+    };
 
     // 토큰 중복 방지: token 기준 upsert
     const { error } = await supabase
@@ -21,6 +26,7 @@ export async function POST(req: Request) {
           token,
           platform,
           user_id: userId ?? null,
+          user_data: userData,
           updated_at: new Date().toISOString()
         }],
         { onConflict: 'token' }
