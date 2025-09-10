@@ -31,15 +31,24 @@ async function getUSDTPriceHistory() {
 }
 
 async function getRateHistory() {
-  console.log('[getRateHistory] API URL: https://rate-history.vercel.app/api/rate-history?days=all');
-  const response = await fetch('https://rate-history.vercel.app/api/rate-history?days=all');
+  console.log('[getRateHistory] API URL: https://rate-history.vercel.app/api/rate-history?days=200');
+  try {
+    const response = await fetch('https://rate-history.vercel.app/api/rate-history?days=200');
 
-  console.log('[getRateHistory] Response status:', response.status);
-  if (!response.ok) throw new Error('Failed to fetch rate history from API');
-  
-  const data = await response.json();
-  console.log('[getRateHistory] Data keys count:', Object.keys(data).length);
-  return data;
+    console.log('[getRateHistory] Response status:', response.status);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[getRateHistory] Error response:', errorText);
+      throw new Error(`Failed to fetch rate history from API: ${response.status} ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('[getRateHistory] Data keys count:', Object.keys(data).length);
+    return data;
+  } catch (error) {
+    console.error('[getRateHistory] Fetch error:', error);
+    throw error;
+  }
 }
 
 async function getKimchiPremiumHistory() {
