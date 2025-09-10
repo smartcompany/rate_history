@@ -125,6 +125,9 @@ function generatePremiumTrends(rateHistory: any, usdtHistory: any): Record<strin
   const baseBuyThreshold = 0.5;
   const baseSellThreshold = 2.5;
   
+  console.log('[generatePremiumTrends] rateHistory keys:', Object.keys(rateHistory).length);
+  console.log('[generatePremiumTrends] usdtHistory keys:', Object.keys(usdtHistory).length);
+  
   // 환율 데이터를 날짜별로 정렬
   const sortedRates = Object.entries(rateHistory)
     .map(([date, rate]) => ({ date: new Date(date), rate: Number(rate) }))
@@ -138,8 +141,13 @@ function generatePremiumTrends(rateHistory: any, usdtHistory: any): Record<strin
     }))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
   
+  console.log('[generatePremiumTrends] sortedRates length:', sortedRates.length);
+  console.log('[generatePremiumTrends] sortedUsdt length:', sortedUsdt.length);
+  
   // 5일 이동평균 윈도우
   const windowSize = 5;
+  
+  console.log('[generatePremiumTrends] Starting loop, sortedRates.length:', sortedRates.length, 'windowSize:', windowSize);
   
   for (let i = windowSize - 1; i < sortedRates.length; i++) {
     const currentDate = sortedRates[i].date;
@@ -149,7 +157,10 @@ function generatePremiumTrends(rateHistory: any, usdtHistory: any): Record<strin
     const rateWindow = sortedRates.slice(i - windowSize + 1, i + 1);
     const usdtWindow = sortedUsdt.slice(i - windowSize + 1, i + 1);
     
-    if (rateWindow.length < windowSize || usdtWindow.length < windowSize) continue;
+    if (rateWindow.length < windowSize || usdtWindow.length < windowSize) {
+      console.log('[generatePremiumTrends] Skipping', dateKey, 'insufficient data:', rateWindow.length, usdtWindow.length);
+      continue;
+    }
     
     // 김치 프리미엄 계산 (5일 평균)
     let kimchiSum = 0;
