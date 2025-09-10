@@ -154,7 +154,15 @@ function generatePremiumTrends(rateHistory: any, usdtHistory: any): Record<strin
   
   console.log('[generatePremiumTrends] Starting loop, sortedRates.length:', sortedRates.length, 'windowSize:', windowSize);
   
-  for (let i = windowSize - 1; i < sortedRates.length; i++) {
+  // USDT 데이터가 있는 마지막 날짜까지만 계산
+  const maxUsdtDate = sortedUsdt[sortedUsdt.length - 1]?.date;
+  const maxUsdtIndex = sortedRates.findIndex(rate => rate.date > maxUsdtDate);
+  const endIndex = maxUsdtIndex > 0 ? maxUsdtIndex : sortedRates.length;
+  
+  console.log('[generatePremiumTrends] USDT 데이터 마지막 날짜:', maxUsdtDate?.toISOString().split('T')[0]);
+  console.log('[generatePremiumTrends] 계산할 마지막 인덱스:', endIndex);
+  
+  for (let i = windowSize - 1; i < endIndex; i++) {
     const currentDate = sortedRates[i].date;
     const dateKey = currentDate.toISOString().split('T')[0];
     
