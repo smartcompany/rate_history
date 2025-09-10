@@ -31,12 +31,17 @@ async function getUSDTPriceHistory() {
 }
 
 async function getRateHistory() {
+  console.log('[getRateHistory] URL:', usdRateHistoryUrl);
   const response = await fetch(usdRateHistoryUrl, {
     headers: { apikey: SUPABASE_KEY }
   });
 
+  console.log('[getRateHistory] Response status:', response.status);
   if (!response.ok) throw new Error('Failed to fetch JSON from Supabase');
-  return await response.json();
+  
+  const data = await response.json();
+  console.log('[getRateHistory] Data keys count:', Object.keys(data).length);
+  return data;
 }
 
 async function getKimchiPremiumHistory() {
