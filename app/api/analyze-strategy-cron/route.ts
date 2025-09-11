@@ -219,25 +219,22 @@ function calculateAdjustedThreshold(
 ): number {
   let adjustedThreshold = baseThreshold;
   
-  // 김치 프리미엄 트렌드와 5일 이동평균을 고려한 조정
-  const buyTrendCoefficient = 0.3;
-  const buyMa5Coefficient = 0.2;
-  const sellTrendCoefficient = 0.5;
-  const sellMa5Coefficient = 0.3;
+  // 김치 프리미엄 트렌드 변화량만을 고려한 조정
+  const buyTrendCoefficient = 1.0;  // 매수: 트렌드 상승 시 기준 낮춤
+  const sellTrendCoefficient = 1.5; // 매도: 트렌드 상승 시 기준 높임
   
   if (isBuyThreshold) {
-    adjustedThreshold += kimchiTrend * buyTrendCoefficient;
-    adjustedThreshold += kimchiMA5 * buyMa5Coefficient;
+    // 김치 프리미엄이 상승 중이면 → 매수 기준 낮춤 (더 쉽게 매수)
+    // 김치 프리미엄이 하락 중이면 → 매수 기준 높임 (더 신중하게)
+    adjustedThreshold -= kimchiTrend * buyTrendCoefficient;
   } else {
+    // 김치 프리미엄이 상승 중이면 → 매도 기준 높임 (더 오래 보유)
+    // 김치 프리미엄이 하락 중이면 → 매도 기준 낮춤 (빨리 매도)
     adjustedThreshold += kimchiTrend * sellTrendCoefficient;
-    adjustedThreshold += kimchiMA5 * sellMa5Coefficient;
   }
   
-  // 임계값 범위 제한 (20% ~ 500%)
-  const minThreshold = baseThreshold * 0.2;
-  const maxThreshold = baseThreshold * 5.0;
-  
-  return Math.max(minThreshold, Math.min(maxThreshold, adjustedThreshold));
+  // 제한 없이 계산된 값 그대로 반환
+  return adjustedThreshold;
 }
 
 // Next.js API Route Handler
