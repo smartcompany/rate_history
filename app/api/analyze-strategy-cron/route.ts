@@ -76,12 +76,12 @@ async function requestStrategyFromChatGPT(usdtHistory: any, rateHistory: any, ki
   console.log('[analyze-strategy-cron] ChatGPT 프롬프트:', prompt);
 
   const body = {
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     messages: [
       { role: "system", content: "당신은 투자 전략 분석 전문가입니다." },
       { role: "user", content: prompt }
     ],
-    max_completion_tokens: 1000
+    max_completion_tokens: 2000
   };
 
   const response = await fetch(apiUrl, {
@@ -99,7 +99,12 @@ async function requestStrategyFromChatGPT(usdtHistory: any, rateHistory: any, ki
     throw new Error('Failed to get strategy from ChatGPT: ' + errorText);
   }
   const data = await response.json();
-  return data.choices?.[0]?.message?.content ?? "분석 결과를 가져오지 못했습니다.";
+  console.log('[requestStrategyFromChatGPT] GPT API 응답:', JSON.stringify(data, null, 2));
+  
+  const content = data.choices?.[0]?.message?.content ?? "분석 결과를 가져오지 못했습니다.";
+  console.log('[requestStrategyFromChatGPT] 추출된 content:', content);
+  
+  return content;
 }
 
 // 날짜 비교 함수 (문자열 비교로 시간대 문제 해결)
@@ -392,6 +397,11 @@ export async function GET(request: Request) {
   try {
     console.log('[analyze-strategy-cron] Cron job started');
 
+    // URL에서 force 파라미터 확인
+    const url = new URL(request.url);
+    const force = url.searchParams.get('force') === 'true';
+    console.log(`[analyze-strategy-cron] Force mode: ${force}`);
+
     // 1. 파일에서 기존 전략 읽기 (배열 형태)
     const fileRes = await fetch(strategyUrl, {
       headers: { apikey: SUPABASE_KEY }
@@ -411,7 +421,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // 2. 오늘 날짜의 전략이 이미 있는지 확인
+    // 2. 오늘 날짜의 전략이 이미 있는지 확인 (force가 true가 아닐 때만)
     const today = new Date();
     const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
     
@@ -455,8 +465,8 @@ export async function GET(request: Request) {
     if (latest && latest.analysis_date) {
       console.log(`[analyze-strategy-cron] 최신 전략 날짜: ${latest.analysis_date}`);
       
-      // 오늘 또는 내일 날짜가 이미 있으면 스킵
-      if (latest.analysis_date === todayStr || latest.analysis_date === koreaTodayStr) {
+      // force가 true가 아니고, 오늘 또는 내일 날짜가 이미 있으면 스킵
+      if (!force && (latest.analysis_date === todayStr || latest.analysis_date === koreaTodayStr)) {
         console.log(`[analyze-strategy-cron] 오늘(${koreaTodayStr}) 전략이 이미 존재함: ${latest.analysis_date}`);
         return NextResponse.json({ 
           message: '오늘 전략이 이미 존재합니다.', 
@@ -464,13 +474,21 @@ export async function GET(request: Request) {
           today: koreaTodayStr
         }, { status: 200 });
       }
+      
+      if (force) {
+        console.log(`[analyze-strategy-cron] Force mode: 기존 전략 무시하고 새로 생성`);
+      }
     }
 
     const strategy = await requestStrategyFromChatGPT(usdtHistory, rateHistory, kimchiPremiumHistory);
+    console.log('[analyze-strategy-cron] GPT 응답 원본:', strategy);
+    
     let parsedStrategy: any;
     try {
       parsedStrategy = JSON.parse(strategy);
-    } catch {
+      console.log('[analyze-strategy-cron] JSON 파싱 성공:', parsedStrategy);
+    } catch (error) {
+      console.log('[analyze-strategy-cron] JSON 파싱 실패:', error);
       parsedStrategy = { strategy };
     }
 
@@ -501,6 +519,7 @@ export async function GET(request: Request) {
     });
 
     console.log('[analyze-strategy-cron] 전략 업데이트 완료:', strategyList.length);
+    console.log('[analyze-strategy-cron] parsedStrategy 구조:', JSON.stringify(parsedStrategy, null, 2));
 
     return NextResponse.json({ 
       message: '전략이 성공적으로 업데이트되었습니다.', 
