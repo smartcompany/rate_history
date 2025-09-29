@@ -129,11 +129,9 @@ function dedupLatestStrategyByDate(strategyList: any[]) {
   return result;
 }
 
-// 김치 프리미엄 트렌드 계산 함수 (단일 패스, 날짜 정렬/정합 처리)
+// 김치 프리미엄 트렌드 계산 함수 (5일 윈도우 기반 최소/최대값 임계값)
 function generatePremiumTrends(rateHistory: Record<string, number>, usdtHistory: Record<string, any>): Record<string, any> {
   const trends: Record<string, any> = {};
-  const baseBuyThreshold = 0.5;
-  const baseSellThreshold = 2.5;
 
   console.log('[generatePremiumTrends] rateHistory keys:', Object.keys(rateHistory).length);
   console.log('[generatePremiumTrends] usdtHistory keys:', Object.keys(usdtHistory).length);
@@ -146,251 +144,50 @@ function generatePremiumTrends(rateHistory: Record<string, number>, usdtHistory:
   const windowSize = 5;
   console.log('[generatePremiumTrends] Starting loop, dates:', commonDates.length, 'windowSize:', windowSize);
 
-  // 슬라이딩 윈도우(현재/이전) 합과 개수 관리로 O(n) 계산
-  const values: (number | null)[] = [];
-  const curWindow: (number | null)[] = [];
-  const prevWindow: (number | null)[] = [];
-  let curSum = 0, curCount = 0;
-  let prevSum = 0, prevCount = 0;
-
+  // 김치 프리미엄 값들 계산
+  const kimchiValues: number[] = [];
   for (let i = 0; i < commonDates.length; i++) {
     const dateKey = commonDates[i];
     const rate = rateHistory[dateKey];
     const usdtData = usdtHistory[dateKey];
     const usdt = (usdtData as any)?.close ?? (usdtData as any)?.price ?? usdtData;
-    const val = (rate > 0 && usdt > 0) ? ((usdt - rate) / rate) * 100 : null;
-    values.push(val);
-
-    // 현재 윈도우 갱신
-    curWindow.push(val);
-    if (val != null) { curSum += val; curCount++; }
-    if (curWindow.length > windowSize) {
-      const out = curWindow.shift();
-      if (out != null) { curSum -= out; curCount--; }
-    }
-
-    // 이전 윈도우 갱신 (현재 인덱스에서 windowSize만큼 뒤의 값을 사용)
-    if (i - windowSize >= 0) {
-      const prevValToAdd = values[i - windowSize];
-      prevWindow.push(prevValToAdd);
-      if (prevValToAdd != null) { prevSum += prevValToAdd; prevCount++; }
-      if (prevWindow.length > windowSize) {
-        const prevOut = prevWindow.shift();
-        if (prevOut != null) { prevSum -= prevOut; prevCount--; }
-      }
-    }
-
-    // MA5 계산 가능 시점부터 결과 산출
-    if (curWindow.length === windowSize) {
-      const kimchiMA5 = Math.round((curCount > 0 ? (curSum / curCount) : 0) * 10) / 10; // 소수점 첫째 자리
-      let kimchiTrend = 0;
-      if (prevWindow.length === windowSize && prevCount > 0) {
-        const prevMA5 = prevSum / prevCount;
-        kimchiTrend = Math.round((kimchiMA5 - prevMA5) * 10) / 10; // 소수점 첫째 자리
-      }
-
-      // 현재까지의 김치 프리미엄 값들 수집 (기술적 분석용)
-      const kimchiValues = values.filter(v => v !== null) as number[];
-
-      // 이전 임계값 가져오기 (변화율 제한용)
-      const previousBuyThreshold = trends[commonDates[i - 1]]?.buy_threshold;
-      const previousSellThreshold = trends[commonDates[i - 1]]?.sell_threshold;
-
-      const buyThreshold = Math.round(calculateAdjustedThreshold(
-        baseBuyThreshold,
-        kimchiTrend,
-        true,
-        kimchiMA5,
-        kimchiValues,
-        previousBuyThreshold
-      ) * 10) / 10; // 소수점 첫째 자리
-
-      const sellThreshold = Math.round(calculateAdjustedThreshold(
-        baseSellThreshold,
-        kimchiTrend,
-        false,
-        kimchiMA5,
-        kimchiValues,
-        previousSellThreshold
-      ) * 10) / 10; // 소수점 첫째 자리
-
-      trends[dateKey] = {
-        buy_threshold: buyThreshold, // 이미 소수점 첫째 자리로 반올림됨
-        sell_threshold: sellThreshold, // 이미 소수점 첫째 자리로 반올림됨
-        kimchi_trend: kimchiTrend, // 이미 소수점 첫째 자리로 반올림됨
-        kimchi_ma5: kimchiMA5 // 이미 소수점 첫째 자리로 반올림됨
-      };
-    }
+    const kimchiPremium = (rate > 0 && usdt > 0) ? ((usdt - rate) / rate) * 100 : 0;
+    kimchiValues.push(kimchiPremium);
   }
 
+  // 5일 윈도우로 슬라이딩하면서 최소/최대값 기반 임계값 계산
+  for (let i = windowSize - 1; i < commonDates.length; i++) {
+    const dateKey = commonDates[i];
+    
+    // 현재 5일 윈도우의 김치 프리미엄 값들
+    const windowValues = kimchiValues.slice(i - windowSize + 1, i + 1);
+    
+    // 5일 중 최소값 = 매수 임계값, 최대값 = 매도 임계값
+    const minValue = Math.min(...windowValues);
+    const maxValue = Math.max(...windowValues);
+    
+    // 현재 김치 프리미엄 (오늘)
+    const currentKimchi = kimchiValues[i];
+    
+    // 5일 평균 (트렌드 파악용)
+    const avgValue = windowValues.reduce((sum, val) => sum + val, 0) / windowSize;
+    
+    // 트렌드 계산 (현재값 - 평균값)
+    const trend = currentKimchi - avgValue;
+
+    trends[dateKey] = {
+      buy_threshold: Math.round(minValue * 10) / 10,    // 5일 중 최소값
+      sell_threshold: Math.round(maxValue * 10) / 10,   // 5일 중 최대값
+      kimchi_trend: Math.round(trend * 10) / 10,        // 현재값 - 평균값
+      kimchi_ma5: Math.round(avgValue * 10) / 10,       // 5일 평균
+      current_kimchi: Math.round(currentKimchi * 10) / 10 // 현재 김치 프리미엄
+    };
+  }
+
+  console.log('[generatePremiumTrends] 생성된 트렌드 데이터:', Object.keys(trends).length, '일');
   return trends;
 }
 
-// 고급 기술적 분석 지표 계산 함수들
-function calculateMACD(values: number[], fastPeriod: number = 12, slowPeriod: number = 26, signalPeriod: number = 9) {
-  if (values.length < slowPeriod) return { macd: 0, signal: 0, histogram: 0 };
-  
-  const emaFast = calculateEMA(values, fastPeriod);
-  const emaSlow = calculateEMA(values, slowPeriod);
-  const macd = emaFast - emaSlow;
-  
-  // MACD 시그널라인 (MACD의 EMA)
-  const macdValues = [macd];
-  const signal = calculateEMA(macdValues, signalPeriod);
-  const histogram = macd - signal;
-  
-  return { macd, signal, histogram };
-}
-
-function calculateEMA(values: number[], period: number): number {
-  if (values.length === 0) return 0;
-  if (values.length < period) return values[values.length - 1];
-  
-  const multiplier = 2 / (period + 1);
-  let ema = values[0];
-  
-  for (let i = 1; i < values.length; i++) {
-    ema = (values[i] * multiplier) + (ema * (1 - multiplier));
-  }
-  
-  return ema;
-}
-
-function calculateRSI(values: number[], period: number = 14): number {
-  if (values.length < period + 1) return 50; // 중립값
-  
-  let gains = 0;
-  let losses = 0;
-  
-  for (let i = 1; i <= period; i++) {
-    const change = values[values.length - i] - values[values.length - i - 1];
-    if (change > 0) gains += change;
-    else losses -= change;
-  }
-  
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-  
-  if (avgLoss === 0) return 100;
-  
-  const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
-}
-
-function calculateBollingerBands(values: number[], period: number = 20, stdDev: number = 2) {
-  if (values.length < period) return { upper: 0, middle: 0, lower: 0, width: 0 };
-  
-  const recentValues = values.slice(-period);
-  const sma = recentValues.reduce((sum, val) => sum + val, 0) / period;
-  
-  const variance = recentValues.reduce((sum, val) => sum + Math.pow(val - sma, 2), 0) / period;
-  const standardDeviation = Math.sqrt(variance);
-  
-  const upper = sma + (standardDeviation * stdDev);
-  const lower = sma - (standardDeviation * stdDev);
-  const width = (upper - lower) / sma; // 정규화된 밴드 폭
-  
-  return { upper, middle: sma, lower, width };
-}
-
-// 최적화된 파라미터 (자동 최적화 결과 - 모든 데이터 기반)
-const OPTIMIZED_PARAMS = {
-  buyTrendCoefficient: 0.05,  // 최적화된 매수 기준 조정 계수
-  sellTrendCoefficient: 0.05, // 최적화된 매도 기준 조정 계수
-  macdWeight: 0.05,
-  rsiWeight: 0.05,
-  bbWeight: 0.05,
-  maWeight: 0.05,
-  adjustmentFactor: 0.02
-};
-
-// 조정된 임계값 계산 함수 (고급 기술적 분석 + 변화율 제한 적용)
-function calculateAdjustedThreshold(
-  baseThreshold: number,
-  kimchiTrend: number,
-  isBuyThreshold: boolean,
-  kimchiMA5: number,
-  kimchiValues: number[] = [],
-  previousThreshold?: number
-): number {
-  let adjustedThreshold = baseThreshold;
-  
-  // 최적화된 트렌드 기반 조정
-  const buyTrendCoefficient = OPTIMIZED_PARAMS.buyTrendCoefficient;
-  const sellTrendCoefficient = OPTIMIZED_PARAMS.sellTrendCoefficient;
-  
-  if (isBuyThreshold) {
-    // 매수 기준: 김치 프리미엄이 낮을 때 사야 하므로
-    // 김치 프리미엄이 상승 중이면 → 매수 기준 낮춤 (더 쉽게 매수)
-    // 김치 프리미엄이 하락 중이면 → 매수 기준 높임 (더 신중하게)
-    adjustedThreshold -= kimchiTrend * buyTrendCoefficient;
-  } else {
-    // 매도 기준: 김치 프리미엄이 높을 때 팔아야 하므로
-    // 김치 프리미엄이 상승 중이면 → 매도 기준 높임 (더 오래 보유)
-    // 김치 프리미엄이 하락 중이면 → 매도 기준 낮춤 (빨리 매도)
-    adjustedThreshold += kimchiTrend * sellTrendCoefficient;
-  }
-  
-  // 추가 기술적 분석 지표 적용 (최근 20일 데이터가 있을 때만)
-  if (kimchiValues.length >= 20) {
-    const recentValues = kimchiValues.slice(-20);
-    
-    // 1. MACD 신호
-    const macd = calculateMACD(recentValues);
-    const macdSignal = macd.histogram > 0 ? 1 : -1; // MACD 히스토그램이 양수면 상승 신호
-    
-    // 2. RSI 신호
-    const rsi = calculateRSI(recentValues);
-    const rsiSignal = rsi < 30 ? 1 : rsi > 70 ? -1 : 0; // 과매도/과매수 신호
-    
-    // 3. Bollinger Bands 신호
-    const bb = calculateBollingerBands(recentValues);
-    const currentValue = recentValues[recentValues.length - 1];
-    const bbSignal = currentValue < bb.lower ? 1 : currentValue > bb.upper ? -1 : 0; // 밴드 돌파 신호
-    
-    // 4. 이동평균선 크로스오버 신호
-    const ma5 = recentValues.slice(-5).reduce((sum, val) => sum + val, 0) / 5;
-    const ma10 = recentValues.slice(-10).reduce((sum, val) => sum + val, 0) / 10;
-    const maCrossSignal = ma5 > ma10 ? 1 : -1; // 골든크로스/데드크로스
-    
-    // 종합 신호 계산 (최적화된 가중평균)
-    const totalSignal = (macdSignal * OPTIMIZED_PARAMS.macdWeight) + 
-                       (rsiSignal * OPTIMIZED_PARAMS.rsiWeight) + 
-                       (bbSignal * OPTIMIZED_PARAMS.bbWeight) + 
-                       (maCrossSignal * OPTIMIZED_PARAMS.maWeight);
-    
-    // 신호 강도에 따른 임계값 조정 (최적화된 계수)
-    const signalStrength = Math.abs(totalSignal);
-    const adjustmentFactor = signalStrength * OPTIMIZED_PARAMS.adjustmentFactor;
-    
-    if (isBuyThreshold) {
-      // 매수: 강한 상승 신호일 때 기준 더 낮춤
-      adjustedThreshold -= totalSignal * adjustmentFactor;
-    } else {
-      // 매도: 강한 하락 신호일 때 기준 더 낮춤
-      adjustedThreshold += totalSignal * adjustmentFactor;
-    }
-    
-    // 변동성 기반 조정 (Bollinger Bands 폭)
-    const volatilityAdjustment = bb.width * 0.5; // 변동성이 클수록 더 민감하게
-    adjustedThreshold *= (1 - volatilityAdjustment);
-  }
-  
-  // 범위 제한 제거 - 김치 프리미엄 트렌드에 따라 자연스럽게 조정
-  // (매수 기준 < 매도 기준은 로직상 보장됨)
-  
-  // 변화율 제한 적용 (이전 값이 있을 때만) - 더 완화
-  if (previousThreshold !== undefined) {
-    const maxChangeRate = 0.3; // 최대 30% 변화 허용 (더 보수적)
-    const minThreshold = previousThreshold * (1 - maxChangeRate);
-    const maxThreshold = previousThreshold * (1 + maxChangeRate);
-    
-    // 변화율 제한 내에서 조정
-    adjustedThreshold = Math.max(minThreshold, Math.min(maxThreshold, adjustedThreshold));
-  }
-  
-  return adjustedThreshold;
-}
 
 // Next.js API Route Handler
 export async function GET(request: Request) {
