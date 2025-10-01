@@ -7,8 +7,10 @@ const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
 const STORAGE_BUCKET = "rate-history";
 const EXCHANGE_RATE_PATH = "rate-history.json";
 const STRATEGE_PATH = "analyze-strategy.json";
+const KIMCHI_TRENDS_PATH = "kimchi-premium-trend.json";
 const exchangeRateUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${EXCHANGE_RATE_PATH}`;
 const strategyUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${STRATEGE_PATH}`;
+const kimchiTrendsUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${KIMCHI_TRENDS_PATH}`;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // 서비스 계정 키를 .env의 GOOGLE_CREDENTIALS에서 파싱
@@ -17,27 +19,21 @@ const PROJECT_ID = serviceAccount.project_id;
 
 // 김치 프리미엄 트렌드 계산 함수들
 
-async function calculateKimchiTrends(exchangeRate: number, targetDate: string): Promise<{ buyPrice: number, sellPrice: number }> {
-  // 기본 임계값 (고정)
-  const baseBuyThreshold = 0.5; // 0.5%
-  const baseSellThreshold = 2.5; // 2.5%
-  
+async function calculateKimchiTrends(exchangeRate: number, targetDate: string): Promise<{ buyPrice: number, sellPrice: number } | null> {
   try {
-    // analyze-strategy API에서 김치 프리미엄 트렌드 데이터 가져오기
-    const analyzeStrategyUrl = 'https://rate-history.vercel.app/api/analyze-strategy?includeKimchiTrends=true';
-    const trendResponse = await fetch(analyzeStrategyUrl);
+    // kimchiTrendsUrl에서 직접 김치 프리미엄 트렌드 데이터 가져오기
+    const trendResponse = await fetch(kimchiTrendsUrl);
     
     if (!trendResponse.ok) {
-      console.warn('[monitoring] analyze-strategy API에서 김치 프리미엄 트렌드 데이터를 가져올 수 없음, 기본값 사용');
-      return await calculateKimchiTrendsFallback(exchangeRate, targetDate);
+      console.warn('[monitoring] kimchiTrendsUrl에서 김치 프리미엄 트렌드 데이터를 가져올 수 없음');
+      return null;
     }
     
-    const responseData = await trendResponse.json();
-    const trends = responseData.kimchiTrends;
+    const trends = await trendResponse.json();
     
-    if (!trends) {
-      console.warn('[monitoring] 김치 프리미엄 트렌드 데이터가 없음, 기본값 사용');
-      return await calculateKimchiTrendsFallback(exchangeRate, targetDate);
+    if (!trends || Object.keys(trends).length === 0) {
+      console.warn('[monitoring] 김치 프리미엄 트렌드 데이터가 없음');
+      return null;
     }
     
     const targetDateTime = new Date(targetDate);
@@ -59,15 +55,15 @@ async function calculateKimchiTrends(exchangeRate: number, targetDate: string): 
     }
     
     if (!trendData) {
-      console.warn('[monitoring] 해당 날짜의 김치 프리미엄 트렌드 데이터를 찾을 수 없음, 기본값 사용');
-      return await calculateKimchiTrendsFallback(exchangeRate, targetDate);
+      console.warn('[monitoring] 해당 날짜의 김치 프리미엄 트렌드 데이터를 찾을 수 없음');
+      return null;
     }
     
     // 동적 임계값으로 매수/매도 가격 계산
     const buyPrice = Number((exchangeRate * (1 + trendData.buy_threshold / 100)).toFixed(1));
     const sellPrice = Number((exchangeRate * (1 + trendData.sell_threshold / 100)).toFixed(1));
     
-    console.log('[monitoring] 김치 프리미엄 트렌드 계산 (analyze-strategy API):', {
+    console.log('[monitoring] 김치 프리미엄 트렌드 계산 (kimchiTrendsUrl):', {
       targetDate: targetDateStr,
       buyThreshold: trendData.buy_threshold,
       sellThreshold: trendData.sell_threshold,
@@ -81,22 +77,8 @@ async function calculateKimchiTrends(exchangeRate: number, targetDate: string): 
     
   } catch (error) {
     console.error('[monitoring] 김치 프리미엄 트렌드 계산 실패:', error);
-    // 실패 시 기본값으로 폴백
-    return await calculateKimchiTrendsFallback(exchangeRate, targetDate);
+    return null;
   }
-}
-
-// 폴백용 기본값 반환 함수
-async function calculateKimchiTrendsFallback(exchangeRate: number, targetDate: string): Promise<{ buyPrice: number, sellPrice: number }> {
-  const baseBuyThreshold = 0.5;
-  const baseSellThreshold = 2.5;
-  
-  console.warn('[monitoring] 김치 프리미엄 트렌드 데이터를 사용할 수 없음, 기본값 사용');
-  
-  return {
-    buyPrice: Number((exchangeRate * (1 + baseBuyThreshold / 100)).toFixed(1)),
-    sellPrice: Number((exchangeRate * (1 + baseSellThreshold / 100)).toFixed(1))
-  };
 }
 
 
@@ -197,12 +179,16 @@ async function sendPushMessagesIfneeded(latestStrategy: any, usdtPrice: any, lat
   await jwtClient.authorize();
   const accessToken = jwtClient.credentials.access_token;
 
+  // 트렌드 추종 모드: 저장된 데이터 사용
+  const trendData = await calculateKimchiTrends(latestExchangeRate, latestStrategy.analysis_date);
+  console.log('[monitoring] trendData:', trendData);
+
   console.log('[monitoring] 푸시 전송 시작:', userTokens.length, '개 토큰');
   for (const user of userTokens) {
     const { token, user_data } = user;
 
     // user_data가 있을 경우 pushType에 따라 분기
-    const { buyPrice, sellPrice, action, body } = await makeBody(latestStrategy, usdtPrice, latestExchangeRate, user_data);
+    const { buyPrice, sellPrice, action, body } = await makeBody(latestStrategy, usdtPrice, latestExchangeRate, user_data, trendData);
 
     if (action === '대기') {
       console.log('[monitoring] 대기 상태, 푸시 전송 생략:', { token });
@@ -259,7 +245,7 @@ async function sendPushMessagesIfneeded(latestStrategy: any, usdtPrice: any, lat
   return { success: true, details: null };
 }
 
-async function makeBody(latestStrategy: any, usdtPrice: any, latestExchangeRate: any, userData: any): Promise<{ buyPrice: any; sellPrice: any; action: any; body: any; }> {
+async function makeBody(latestStrategy: any, usdtPrice: any, latestExchangeRate: any, userData: any, trendData: any): Promise<{ buyPrice: any; sellPrice: any; action: any; body: any; }> {
   let buyPrice = null;
   let sellPrice = null;
   let action = '대기';
@@ -281,19 +267,17 @@ async function makeBody(latestStrategy: any, usdtPrice: any, latestExchangeRate:
     } else if (userData.pushType === 'kimchi') {
       logic = '김치 프리미엄 분석';
       
-        if (userData.useTrend === true) {
-          // 트렌드 추종 모드: 저장된 데이터 사용
-          const trendData = await calculateKimchiTrends(latestExchangeRate, latestStrategy.analysis_date);
+        if (userData.useTrend === true && trendData !== null) {
+          // 트렌드 데이터가 있으면 사용
           buyPrice = trendData.buyPrice;
           sellPrice = trendData.sellPrice;
-          logic = '김치 프리미엄 트렌드 분석';
         } else {
-        // 기존 모드: 고정 백분율
-        const buyPercent = Number(userData.gimchiBuyPercent ?? 0.5);
-        const sellPercent = Number(userData.gimchiSellPercent ?? 2.5);
-        buyPrice = Number((latestExchangeRate * (1 + buyPercent / 100)).toFixed(1));
-        sellPrice = Number((latestExchangeRate * (1 + sellPercent / 100)).toFixed(1));
-      }
+          // 기존 모드: 고정 백분율
+          const buyPercent = Number(userData.gimchiBuyPercent ?? 0.5);
+          const sellPercent = Number(userData.gimchiSellPercent ?? 2.5);
+          buyPrice = Number((latestExchangeRate * (1 + buyPercent / 100)).toFixed(1));
+          sellPrice = Number((latestExchangeRate * (1 + sellPercent / 100)).toFixed(1));
+        }
 
       if (usdtPrice < buyPrice) {
         action = '매수';
