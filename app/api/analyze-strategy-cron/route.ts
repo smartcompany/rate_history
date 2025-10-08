@@ -156,30 +156,31 @@ function generatePremiumTrends(rateHistory: Record<string, number>, usdtHistory:
   }
 
   // 5일 윈도우로 슬라이딩하면서 최소/최대값 기반 임계값 계산
-  for (let i = windowSize - 1; i < commonDates.length; i++) {
+  // 각 날짜는 그 날짜 이전 5일의 데이터만 사용 (과거 데이터만 참조)
+  for (let i = windowSize; i < commonDates.length; i++) {
     const dateKey = commonDates[i];
     
-    // 현재 5일 윈도우의 김치 프리미엄 값들
-    const windowValues = kimchiValues.slice(i - windowSize + 1, i + 1);
+    // 현재 날짜 이전 5일의 김치 프리미엄 값들 (현재 날짜 제외)
+    const windowValues = kimchiValues.slice(i - windowSize, i);
     
-    // 5일 중 최소값 = 매수 임계값, 최대값 = 매도 임계값
+    // 이전 5일 중 최소값 = 매수 임계값, 최대값 = 매도 임계값
     const minValue = Math.min(...windowValues);
     const maxValue = Math.max(...windowValues);
     
     // 현재 김치 프리미엄 (오늘)
     const currentKimchi = kimchiValues[i];
     
-    // 5일 평균 (트렌드 파악용)
+    // 이전 5일 평균 (트렌드 파악용)
     const avgValue = windowValues.reduce((sum, val) => sum + val, 0) / windowSize;
     
-    // 트렌드 계산 (현재값 - 평균값)
+    // 트렌드 계산 (현재값 - 이전 5일 평균값)
     const trend = currentKimchi - avgValue;
 
     trends[dateKey] = {
-      buy_threshold: Math.round(minValue * 10) / 10,    // 5일 중 최소값
-      sell_threshold: Math.round(maxValue * 10) / 10,   // 5일 중 최대값
-      kimchi_trend: Math.round(trend * 10) / 10,        // 현재값 - 평균값
-      kimchi_ma5: Math.round(avgValue * 10) / 10,       // 5일 평균
+      buy_threshold: Math.round(minValue * 10) / 10,    // 이전 5일 중 최소값
+      sell_threshold: Math.round(maxValue * 10) / 10,   // 이전 5일 중 최대값
+      kimchi_trend: Math.round(trend * 10) / 10,        // 현재값 - 이전 5일 평균값
+      kimchi_ma5: Math.round(avgValue * 10) / 10,       // 이전 5일 평균
       current_kimchi: Math.round(currentKimchi * 10) / 10 // 현재 김치 프리미엄
     };
   }
@@ -242,21 +243,6 @@ export async function GET(request: Request) {
     ]);
  
     await setupKPremiumTrends(rateHistory, usdtHistory);
-    
-    // 주기적으로 최적화 실행 (매일 한 번)
-    const shouldOptimize = Math.random() < 0.1; // 10% 확률로 최적화 실행
-    if (shouldOptimize) {
-      console.log('[analyze-strategy-cron] 전략 최적화 실행');
-      try {
-        const optimizeResponse = await fetch('http://localhost:3001/api/optimize-strategy');
-        const optimizeResult = await optimizeResponse.json();
-        if (optimizeResult.success) {
-          console.log('[analyze-strategy-cron] 최적화 완료:', optimizeResult.bestResult);
-        }
-      } catch (error) {
-        console.error('[analyze-strategy-cron] 최적화 실패:', error);
-      }
-    }
     
     const latest = strategyList[0];
     if (latest && latest.analysis_date) {
