@@ -24,6 +24,10 @@
         {
             "path": "/api/analyze-strategy",
             "schedule": "0 1 * * *"
+        },
+        {
+            "path": "/api/airdrop-collect",
+            "schedule": "0 */6 * * *"
         }
     ]
 }

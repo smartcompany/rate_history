@@ -20,3 +20,11 @@ jobs:
             -H "Content-Type: application/json" \
             -H "User-Agent: github-actions-cron" \
             --fail --show-error --silent || echo "Strategy API failed"
+      
+      - name: Collect airdrop events
+        run: |
+          echo "Calling airdrop-collect API..."
+          curl -X GET https://rate-history.vercel.app/api/airdrop-collect \
+            -H "Content-Type: application/json" \
+            -H "User-Agent: github-actions-cron" \
+            --fail --show-error --silent || echo "Airdrop collect API failed"
