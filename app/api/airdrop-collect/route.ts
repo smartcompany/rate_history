@@ -142,13 +142,24 @@ async function saveAirdropsToSupabase(airdrops: CollectedAirdrop[]): Promise<voi
 
     for (const airdrop of airdrops) {
       try {
+        // link가 비어있으면 스킵
+        if (!airdrop.link || airdrop.link.trim() === '') {
+          console.log(`[airdrop-collect] link가 없는 airdrop 스킵: ${airdrop.title}`);
+          continue;
+        }
+
         // 중복 체크: 동일한 link와 source가 이미 있으면 스킵
-        const { data: existing } = await supabase
+        const { data: existing, error: checkError } = await supabase
           .from('airdrop_events')
           .select('id')
           .eq('link', airdrop.link)
           .eq('source', airdrop.source)
-          .single();
+          .maybeSingle();
+
+        if (checkError && checkError.code !== 'PGRST116') {
+          // PGRST116은 "not found" 에러이므로 정상. 다른 에러는 로그만 남기고 계속 진행
+          console.error(`[airdrop-collect] 중복 체크 에러:`, checkError);
+        }
 
         if (existing) {
           console.log(`[airdrop-collect] 중복 airdrop 스킵: ${airdrop.title} (${airdrop.link})`);
@@ -218,6 +229,29 @@ export async function GET(request: Request) {
     
     console.log('[airdrop-collect] GET 요청 수신');
     
+    // Supabase 테이블 존재 여부 확인
+    try {
+      const { error: checkError } = await supabase
+        .from('airdrop_events')
+        .select('id')
+        .limit(1);
+      
+      if (checkError && checkError.code === '42P01') {
+        // 테이블이 없는 경우
+        console.error('[airdrop-collect] airdrop_events 테이블이 없습니다. Supabase에서 테이블을 생성하세요.');
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'airdrop_events 테이블이 없습니다. supabase-airdrop-table.sql을 실행하세요.',
+            hint: 'Supabase Dashboard > SQL Editor에서 테이블 생성 SQL을 실행하세요.',
+          },
+          { status: 500 }
+        );
+      }
+    } catch (checkErr) {
+      console.error('[airdrop-collect] 테이블 체크 실패:', checkErr);
+    }
+    
     // 수집 실행
     const airdrops = await collectAllAirdrops();
     
@@ -240,6 +274,7 @@ export async function GET(request: Request) {
       {
         success: false,
         error: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       },
       { status: 500 }
     );
