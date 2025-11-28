@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import analysisPrompt from './analysis-prompt.txt';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
@@ -8,7 +9,6 @@ const STRATEGE_UPLOAD_PATH = "analyze-strategy.json";
 const USDT_PATH = "usdt-history.json";
 const GIMCHI_PATH = "kimchi-premium.json";
 const USD_RATE_PATH = "rate-history.json";
-const PROMPT_PATH = "analysis-prompt.txt";
 const GIMCH_PREMIUM_TREND_PATH = "kimchi-premium-trend.json";
 
 const usdtHistoryUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${USDT_PATH}`;
@@ -16,7 +16,6 @@ const gimchHistoryUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCK
 const usdRateHistoryUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${USD_RATE_PATH}`;
 const strategyUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${STRATEGE_PATH}`;
 const strategyUploadUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${STRATEGE_UPLOAD_PATH}`;
-const promptUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${PROMPT_PATH}`;
 const gimchPremiumTrendUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${GIMCH_PREMIUM_TREND_PATH}`;
 const gimchPremiumTrendUploadUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${GIMCH_PREMIUM_TREND_PATH}`;
 
@@ -53,20 +52,12 @@ async function getKimchiPremiumHistory() {
   return await response.json();
 }
 
-async function getPromptTemplate() {
-  const response = await fetch(promptUrl, {
-    headers: { apikey: SUPABASE_KEY }
-  });
-  if (!response.ok) throw new Error('Failed to fetch prompt template');
-  return await response.text();
-}
-
 // OpenAI API 호출 함수
 async function requestStrategyFromChatGPT(usdtHistory: any, rateHistory: any, kimchiPremiumHistory: any) {
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
   const apiUrl = "https://api.openai.com/v1/chat/completions";
 
-  const promptTemplate = await getPromptTemplate();
+  const promptTemplate = analysisPrompt;
   const prompt = promptTemplate
     .replace('{{usdtHistory}}', JSON.stringify(usdtHistory))
     .replace('{{rateHistory}}', JSON.stringify(rateHistory))
