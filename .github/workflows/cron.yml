@@ -13,18 +13,19 @@ jobs:
         run: |
           curl -X GET https://rate-history.vercel.app/api/monitoring
       
-      - name: Update strategy (if needed)
+      - name: Update USDT strategy (if needed)
         run: |
           echo "Calling analyze-strategy-cron API..."
           curl -X GET https://rate-history.vercel.app/api/analyze-strategy-cron \
             -H "Content-Type: application/json" \
             -H "User-Agent: github-actions-cron" \
-            --fail --show-error --silent || echo "Strategy API failed"
+            --fail --show-error --silent || echo "USDT Strategy API failed"
       
-      - name: Collect airdrop events
+      - name: Update BTC strategy (if needed)
         run: |
-          echo "Calling airdrop-collect API..."
-          curl -X GET https://rate-history.vercel.app/api/airdrop-collect \
+          echo "Calling analyze-btc-strategy-cron API..."
+          curl -X GET https://rate-history.vercel.app/api/analyze-btc-strategy-cron \
             -H "Content-Type: application/json" \
             -H "User-Agent: github-actions-cron" \
-            --fail --show-error --silent || echo "Airdrop collect API failed"
+            --fail --show-error --silent || echo "BTC Strategy API failed"
+      
