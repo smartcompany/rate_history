@@ -48,10 +48,26 @@ async function getBTCPriceHistory() {
   const response = await fetch(storageUrl, {
     headers: { apikey: SUPABASE_KEY }
   });
+  
+  // 404 또는 400 (파일 없음) 처리
   if (response.status === 404) {
     console.log('[BTC-HISTORY] 기존 데이터 없음 (404), 빈 객체 반환');
     return {}; // 파일 없으면 빈 객체 반환
   }
+  
+  // 400 상태 코드일 때 응답 본문 확인 (Supabase가 파일 없을 때 400을 반환할 수 있음)
+  if (response.status === 400) {
+    try {
+      const errorBody = await response.json();
+      if (errorBody.error === 'not_found' || errorBody.message?.includes('not found')) {
+        console.log('[BTC-HISTORY] 기존 데이터 없음 (400 with not_found), 빈 객체 반환');
+        return {}; // 파일 없으면 빈 객체 반환
+      }
+    } catch (_) {
+      // JSON 파싱 실패 시 계속 진행
+    }
+  }
+  
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[BTC-HISTORY] Supabase 조회 실패:', response.status, errorText);
