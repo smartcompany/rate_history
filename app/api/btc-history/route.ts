@@ -20,11 +20,17 @@ function formatDate(date: Date) {
  */
 async function fetchUpbitBTCByPage(count = 200) {
   const url = `https://api.upbit.com/v1/candles/days?market=KRW-BTC&count=${count}`;
+  console.log('[BTC-HISTORY] Upbit API 호출:', url);
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0' }
   });
-  if (!res.ok) throw new Error('Upbit BTC fetch failed');
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('[BTC-HISTORY] Upbit API 실패:', res.status, errorText);
+    throw new Error(`Upbit BTC fetch failed: ${res.status} - ${errorText}`);
+  }
   const data = await res.json();
+  console.log('[BTC-HISTORY] Upbit API 응답 받음, 항목 수:', data.length);
 
   // [{ date, open, close, high, low }, ...] 형태로 변환
   return data.map((item: any) => ({
@@ -38,16 +44,27 @@ async function fetchUpbitBTCByPage(count = 200) {
 
 // Supabase에서 BTC 히스토리 가져오기
 async function getBTCPriceHistory() {
+  console.log('[BTC-HISTORY] Supabase에서 기존 데이터 가져오기:', storageUrl);
   const response = await fetch(storageUrl, {
     headers: { apikey: SUPABASE_KEY }
   });
-  if (response.status === 404) return {}; // 파일 없으면 빈 객체 반환
-  if (!response.ok) throw new Error('Failed to fetch JSON from Supabase');
-  return await response.json();
+  if (response.status === 404) {
+    console.log('[BTC-HISTORY] 기존 데이터 없음 (404), 빈 객체 반환');
+    return {}; // 파일 없으면 빈 객체 반환
+  }
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[BTC-HISTORY] Supabase 조회 실패:', response.status, errorText);
+    throw new Error(`Failed to fetch JSON from Supabase: ${response.status} - ${errorText}`);
+  }
+  const data = await response.json();
+  console.log('[BTC-HISTORY] 기존 데이터 로드 완료, 항목 수:', Object.keys(data).length);
+  return data;
 }
 
 // Supabase에 BTC 히스토리 저장하기
 async function saveBTCPriceHistory(history: Record<string, { open: number; close: number; high: number; low: number }>) {
+  console.log('[BTC-HISTORY] Supabase에 저장 시작, 항목 수:', Object.keys(history).length);
   const res = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
@@ -59,15 +76,25 @@ async function saveBTCPriceHistory(history: Record<string, { open: number; close
   });
   if (!res.ok) {
     const errText = await res.text();
+    console.error('[BTC-HISTORY] Supabase 저장 실패:', res.status, errText);
     throw new Error('Failed to save BTC history: ' + errText);
   }
+  console.log('[BTC-HISTORY] Supabase 저장 완료');
 }
 
 // Next.js Route Handler
 export async function GET(request: Request) {
   try {
+    console.log('[BTC-HISTORY] 요청 시작');
+    
+    // 환경 변수 확인
+    if (!SUPABASE_URL || !SUPABASE_KEY) {
+      throw new Error('Supabase 환경 변수가 설정되지 않았습니다');
+    }
+    
     const { searchParams } = new URL(request.url);
     const daysParam = searchParams.get('days');
+    console.log('[BTC-HISTORY] daysParam:', daysParam);
 
     let days = 1;
     if (daysParam === 'all') {
@@ -120,8 +147,10 @@ export async function GET(request: Request) {
     console.log('[DEBUG] sorted keys:', Object.keys(sorted));
 
     await saveBTCPriceHistory(sorted);
+    console.log('[BTC-HISTORY] 데이터 처리 완료, 반환할 항목 수:', Object.keys(sorted).length);
 
     if (daysParam === 'all') {
+      console.log('[BTC-HISTORY] 전체 데이터 반환');
       return new Response(
         JSON.stringify(sorted, null, 2),
         {
@@ -145,8 +174,12 @@ export async function GET(request: Request) {
       );
     }
   } catch (err: any) {
-    console.error(err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('[BTC-HISTORY ERROR]', err);
+    console.error('[BTC-HISTORY ERROR] Stack:', err.stack);
+    return NextResponse.json({ 
+      error: err.message || 'Unknown error',
+      details: err.stack 
+    }, { status: 500 });
   }
 }
 
