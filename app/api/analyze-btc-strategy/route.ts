@@ -30,6 +30,32 @@ export async function GET(request: Request) {
       } catch {
         strategyList = [];
       }
+    } else if (fileRes.status === 404 || fileRes.status === 400) {
+      // 파일이 없으면 빈 배열 반환 (에러 아님)
+      console.log('[analyze-btc-strategy] 전략 파일 없음 (404/400), 빈 배열 반환');
+      try {
+        const errorBody = await fileRes.json();
+        if (errorBody.error === 'not_found' || errorBody.message?.includes('not found')) {
+          console.log('[analyze-btc-strategy] 파일 없음 확인, 빈 배열 반환');
+          return new Response(
+            JSON.stringify([], null, 2),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            }
+          );
+        }
+      } catch (_) {
+        // JSON 파싱 실패 시 계속 진행
+      }
+      // 404/400이지만 not_found가 아닌 경우 빈 배열 반환
+      return new Response(
+        JSON.stringify([], null, 2),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     console.log('[analyze-btc-strategy] BTC 전략 데이터 반환:', strategyList.length, '개 전략');
