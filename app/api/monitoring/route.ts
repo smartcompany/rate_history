@@ -302,16 +302,32 @@ async function makeBody(latestStrategy: any, usdtPrice: any, latestExchangeRate:
     }
   }
 
+  // 표시용 추천가 보정:
+  // - 매수 추천가가 현재가보다 높으면, 실제로는 "현재가에 사는 것"이 합리적이므로 현재가로 표시
+  // - 매도 추천가가 현재가보다 낮으면, 실제로는 "현재가에 파는 것"이 합리적이므로 현재가로 표시
+  const displayBuyPrice = (action === '매수' && buyPrice != null)
+    ? Math.min(Number(buyPrice), Number(usdtPrice))
+    : buyPrice;
+
+  const displaySellPrice = (action === '매도' && sellPrice != null)
+    ? Math.max(Number(sellPrice), Number(usdtPrice))
+    : sellPrice;
+
   let actionText = "";
   if (action === '대기') {
     actionText = `대기 중: ${buyPrice}원 ~ ${sellPrice}원`;
   } else if (action === '매수') {
-    actionText = `매수 추천: ${buyPrice}원`;
+    actionText = `매수 추천: ${displayBuyPrice}원`;
   } else if (action === '매도') {
-    actionText = `매도 추천: ${sellPrice}원`;
+    actionText = `매도 추천: ${displaySellPrice}원`;
   }
 
   const body = `${logic}\n${actionText}\n현재 USDT 가격: ${usdtPrice}원`;
-  return { buyPrice, sellPrice, action, body };
+
+  // 알림 payload(data)에서도 추천가를 동일하게 보정해 전달
+  const finalBuyPrice = (action === '매수') ? displayBuyPrice : buyPrice;
+  const finalSellPrice = (action === '매도') ? displaySellPrice : sellPrice;
+
+  return { buyPrice: finalBuyPrice, sellPrice: finalSellPrice, action, body };
 }
 
