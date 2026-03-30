@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const includeKimchiTrends = searchParams.get('includeKimchiTrends') === 'true';
     
-    console.log('[analyze-strategy] Supabase에서 전략 데이터 조회', { includeKimchiTrends });
+    console.log('[analyze-strategy] Supabase에서 전략 데이터  조회', { includeKimchiTrends });
 
     // Supabase에서 기존 전략 데이터만 가져오기
     const fileRes = await fetch(strategyUrl, {
