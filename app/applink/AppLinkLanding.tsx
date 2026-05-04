@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+/** 앱 인애서 「공유하기」용 `/applink` 전용(X용 `/applink/social` 과 코드 공유 안 함). */
 const SITE_ORIGIN = "https://rate-history.vercel.app";
 
 const IOS_APP_STORE_WEB =
@@ -11,10 +12,42 @@ const IOS_APP_STORE_ITMS =
 const PLAY_STORE_MARKET =
   "market://details?id=com.smartCompany.usdtSignal";
 
-const SOCIAL_PATH = "/applink/social";
+export function createApplinkMetadata(canonicalPath: string): Metadata {
+  const canonicalUrl = `${SITE_ORIGIN}${canonicalPath}`;
+  return {
+    title: "USDT Signal — Download",
+    description:
+      "Install USDT Signal from the App Store or Google Play. USDT / KRW and K-premium tools.",
+    robots: { index: false, follow: false },
+    openGraph: {
+      title: "USDT Signal",
+      description:
+        "USDT / KRW, kimchi premium, and strategy simulation — install the app.",
+      url: canonicalUrl,
+      siteName: "USDT Signal",
+      type: "website",
+      images: [
+        {
+          url: `${SITE_ORIGIN}/og-share.png`,
+          width: 1024,
+          height: 1024,
+          alt: "USDT Signal",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "USDT Signal",
+      description:
+        "USDT / KRW, kimchi premium, and strategy simulation — install the app.",
+      images: [`${SITE_ORIGIN}/og-share.png`],
+    },
+  };
+}
 
 /**
- * X(Twitter)·공개 소셜용 랜딩. 인앱 앱 「공유하기」는 `/applink` 만 사용함.
+ * X 등 인앱 브라우저: 자동 itms/market 이동을 피하고 버튼으로 스토어 이동.
+ * 일반 모바일 브라우저: 짧은 지연 후 https 스토어로 폴백.
  */
 const BOOT_SCRIPT = `
 (function () {
@@ -40,39 +73,7 @@ const BOOT_SCRIPT = `
 })();
 `.trim();
 
-const canonicalUrl = `${SITE_ORIGIN}${SOCIAL_PATH}`;
-
-export const metadata: Metadata = {
-  title: "USDT Signal — Download",
-  description:
-    "Install USDT Signal from the App Store or Google Play. USDT / KRW and K-premium tools.",
-  robots: { index: false, follow: false },
-  openGraph: {
-    title: "USDT Signal",
-    description:
-      "USDT / KRW, kimchi premium, and strategy simulation — install the app.",
-    url: canonicalUrl,
-    siteName: "USDT Signal",
-    type: "website",
-    images: [
-      {
-        url: `${SITE_ORIGIN}/og-share.png`,
-        width: 1024,
-        height: 1024,
-        alt: "USDT Signal",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "USDT Signal",
-    description:
-      "USDT / KRW, kimchi premium, and strategy simulation — install the app.",
-    images: [`${SITE_ORIGIN}/og-share.png`],
-  },
-};
-
-export default function AppLinkSocialPage() {
+export default function AppLinkLanding() {
   return (
     <>
       <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />

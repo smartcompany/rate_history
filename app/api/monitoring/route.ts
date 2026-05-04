@@ -273,8 +273,8 @@ async function makeBody(latestStrategy: any, usdtPrice: any, latestExchangeRate:
           sellPrice = trendData.sellPrice;
         } else {
           // 기존 모드: 고정 백분율
-          const buyPercent = Number(userData.gimchiBuyPercent ?? 0.5);
-          const sellPercent = Number(userData.gimchiSellPercent ?? 2.5);
+          const buyPercent = Number(userData.gimchiBuyPercent ?? 0);
+          const sellPercent = Number(userData.gimchiSellPercent ?? 1);
           buyPrice = Number((latestExchangeRate * (1 + buyPercent / 100)).toFixed(1));
           sellPrice = Number((latestExchangeRate * (1 + sellPercent / 100)).toFixed(1));
         }
