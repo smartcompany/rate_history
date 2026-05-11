@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "method": "equal_count_quintiles",
+  "reference": "baseline_bucket_order_3",
+  "formula": "prem_adj_pp = prem_raw_pp + delta_add_pp; buy/sell thresholds apply to implicit prem_adj via price targets derived from thresholds minus delta.",
+  "note_ko": "USD/KRW 퀀타일 구간별 delta_add_pp(퍼센트포인트). 참조는 order 3 버킷입니다. 새 데이터마다 재산출해 갱신하세요.",
+  "buckets": [
+    {
+      "order": 1,
+      "fx_min_inclusive": 1446.38,
+      "fx_max_exclusive": 1470.81,
+      "delta_add_pp": -0.5669
+    },
+    {
+      "order": 2,
+      "fx_min_inclusive": 1470.81,
+      "fx_max_exclusive": 1479.83,
+      "delta_add_pp": -0.2607
+    },
+    {
+      "order": 3,
+      "fx_min_inclusive": 1479.83,
+      "fx_max_exclusive": 1486.37,
+      "delta_add_pp": 0
+    },
+    {
+      "order": 4,
+      "fx_min_inclusive": 1486.37,
+      "fx_max_exclusive": 1504.08,
+      "delta_add_pp": 0.9186
+    },
+    {
+      "order": 5,
+      "fx_min_inclusive": 1504.08,
+      "fx_max_inclusive": 1534.78,
+      "delta_add_pp": -0.0314
+    }
+  ]
+}
