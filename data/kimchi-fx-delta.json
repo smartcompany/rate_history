@@ -27,13 +27,13 @@
       "order": 4,
       "fx_min_inclusive": 1486.37,
       "fx_max_exclusive": 1504.08,
-      "delta_add_pp": 1.4855
+      "delta_add_pp": 1.0
     },
     {
       "order": 5,
       "fx_min_inclusive": 1504.08,
-      "fx_max_inclusive": 1534.78,
-      "delta_add_pp": 0.5355
+      "fx_max_inclusive": 2000,
+      "delta_add_pp": 1.5355
     }
   ]
 }
