@@ -1,9 +1,27 @@
 {
-  "version": 1,
-  "method": "equal_count_quintiles",
+  "version": 2,
+  "methods": [
+    {
+      "name": "equal_count_quintiles",
+      "description": "USD/KRW 퀀타일 구간별 delta_add_pp(퍼센트포인트). 참조(Δ=0)는 order 1 구간입니다. 이전 order_3 기준 테이블 대비 전 구간에 (+0.5669) 리베이스."
+    },
+    {
+      "name": "affine_fx_ratio",
+      "description": "환율이 기준 대비 몇 % 벗어났는지에 비례(퍼센트포인트)해 델타를 줍니다."
+    }
+  ],
+  "method": "affine_fx_ratio",
   "reference": "baseline_bucket_order_1",
-  "formula": "prem_adj_pp = prem_raw_pp + delta_add_pp; buy/sell thresholds apply to implicit prem_adj via price targets derived from thresholds minus delta.",
-  "note_ko": "USD/KRW 퀀타일 구간별 delta_add_pp(퍼센트포인트). 참조(Δ=0)는 order 1 구간입니다. 이전 order_3 기준 테이블 대비 전 구간에 (+0.5669) 리베이스.",
+  "formula": "prem_adj_pp = prem_raw_pp + delta_add_pp; buy/sell thresholds apply to implicit prem_adj via price targets derived from thresholds minus delta. Switch method only: equal_count_quintiles uses buckets; affine_fx_ratio uses delta_model.",
+  "note_ko": "buckets·delta_model 둘 다 유지합니다. 델타 계산만 method로 고릅니다: equal_count_quintiles → 구간표, affine_fx_ratio → 환율 비율식.",
+  "delta_model": {
+    "type": "affine_ratio",
+    "fx_reference": 1458.6,
+    "bias_pp": 0,
+    "k_pp_per_fx_percent": 0.34,
+    "clamp_min": 0,
+    "clamp_max": 2.5
+  },
   "buckets": [
     {
       "order": 1,
