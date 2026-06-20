@@ -20,7 +20,7 @@
     "bias_pp": 0,
     "k_pp_per_fx_percent": 0.34,
     "clamp_min": 0,
-    "clamp_max": 2.5
+    "clamp_max": 10
   },
   "buckets": [
     {
