@@ -7,7 +7,7 @@
     },
     {
       "name": "affine_fx_ratio",
-      "description": "환율이 기준 대비 몇 % 벗어났는지에 비례(퍼센트포인트)해 델타를 줍니다."
+      "description": "선형(k·x) + 고환율(≥onset) 2차 가속(k_hi·max(0,x-x_onset)²). x=(fx/fx_ref-1)·100."
     }
   ],
   "method": "affine_fx_ratio",
@@ -19,6 +19,8 @@
     "fx_reference": 1458.6,
     "bias_pp": 0,
     "k_pp_per_fx_percent": 0.34,
+    "high_fx_onset_inclusive": 1545,
+    "k_hi_pp_per_fx_percent_squared": 1.2,
     "clamp_min": 0,
     "clamp_max": 10
   },
