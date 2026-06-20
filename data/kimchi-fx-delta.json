@@ -22,7 +22,7 @@
     "high_fx_onset_inclusive": 1545,
     "k_hi_pp_per_fx_percent_squared": 1.2,
     "clamp_min": 0,
-    "clamp_max": 10
+    "clamp_max": 20
   },
   "buckets": [
     {
