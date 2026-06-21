@@ -180,126 +180,25 @@ function generatePremiumTrends(rateHistory: Record<string, number>, usdtHistory:
 }
 
 
-// Next.js API Route Handler
-export async function GET(request: Request) {
+// Next.js API Route Handler — 김치 프리미엄 트렌드만 갱신 (AI 전략 생성 제거)
+export async function GET() {
   try {
-    console.log('[analyze-strategy-cron] Cron job started');
+    console.log('[analyze-strategy-cron] Kimchi trend cron started');
 
-    // URL에서 force 파라미터 확인
-    const url = new URL(request.url);
-    const force = url.searchParams.get('force') === 'true';
-    console.log(`[analyze-strategy-cron] Force mode: ${force}`);
-
-    // 1. 파일에서 기존 전략 읽기 (배열 형태)
-    const fileRes = await fetch(strategyUrl, {
-      headers: { apikey: SUPABASE_KEY }
-    });
-    let strategyList: any[] = [];
-    if (fileRes.ok) {
-      const text = await fileRes.text();
-      try {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) {
-          strategyList = parsed;
-        } else if (parsed) {
-          strategyList = [parsed];
-        }
-      } catch {
-        strategyList = [];
-      }
-    }
-
-    // 2. 오늘 날짜의 전략이 이미 있는지 확인 (force가 true가 아닐 때만)
-    const today = new Date();
-    const todayStr = today.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
-    
-    // 한국 시간대 고려 (UTC+9)
-    const koreaToday = new Date(today.getTime() + (9 * 60 * 60 * 1000));
-    const koreaTodayStr = koreaToday.toISOString().slice(0, 10);
-    
-    console.log(`[analyze-strategy-cron] UTC 오늘: ${todayStr}, 한국 오늘: ${koreaTodayStr}`);
-
-    console.log('usdtHistory, rateHistory, kimchiPremiumHistory 가져오기 시작');
-    
-    // 먼저 USDT 데이터를 가져와서 개수 확인
     const usdtHistory = await getUSDTPriceHistory();
     const usdtCount = Object.keys(usdtHistory).length;
     console.log('[analyze-strategy-cron] USDT 데이터 개수:', usdtCount);
-    
-    // USDT 개수만큼 환율 데이터 가져오기
-    const [rateHistory, kimchiPremiumHistory] = await Promise.all([
+
+    const [rateHistory] = await Promise.all([
       getRateHistory(usdtCount),
       getKimchiPremiumHistory(),
     ]);
- 
+
     await setupKPremiumTrends(rateHistory, usdtHistory);
-    
-    const latest = strategyList[0];
-    if (latest && latest.analysis_date) {
-      console.log(`[analyze-strategy-cron] 최신 전략 날짜: ${latest.analysis_date}`);
-      
-      // force가 true가 아니고, 오늘 또는 내일 날짜가 이미 있으면 스킵
-      if (!force && (latest.analysis_date === todayStr || latest.analysis_date === koreaTodayStr)) {
-        console.log(`[analyze-strategy-cron] 오늘(${koreaTodayStr}) 전략이 이미 존재함: ${latest.analysis_date}`);
-        return NextResponse.json({ 
-          message: '오늘 전략이 이미 존재합니다.', 
-          latest_date: latest.analysis_date,
-          today: koreaTodayStr
-        }, { status: 200 });
-      }
-      
-      if (force) {
-        console.log(`[analyze-strategy-cron] Force mode: 기존 전략 무시하고 새로 생성`);
-      }
-    }
 
-    const strategy = await requestStrategyFromChatGPT(usdtHistory, rateHistory, kimchiPremiumHistory);
-    console.log('[analyze-strategy-cron] GPT 응답 원본:', strategy);
-    
-    let parsedStrategy: any;
-    try {
-      parsedStrategy = JSON.parse(strategy);
-      console.log('[analyze-strategy-cron] JSON 파싱 성공:', parsedStrategy);
-    } catch (error) {
-      console.log('[analyze-strategy-cron] JSON 파싱 실패:', error);
-      parsedStrategy = { strategy };
-    }
-
-    // 4. 배열 맨 앞에 추가 (최신이 맨 앞)
-    // analysis_date를 한국 오늘 날짜로 강제 보정
-    if (parsedStrategy && parsedStrategy.analysis_date && parsedStrategy.analysis_date !== koreaTodayStr) {
-      console.log(`[analyze-strategy-cron] analysis_date 보정: ${parsedStrategy.analysis_date} → ${koreaTodayStr}`);
-      parsedStrategy.analysis_date = koreaTodayStr;
-    }
-
-    console.log('[analyze-strategy-cron] parsedStrategy:', parsedStrategy);
-    strategyList.unshift(parsedStrategy);
-
-    // 중복 제거: 동일 날짜는 마지막(최신) 것만 남김
-    strategyList = dedupLatestStrategyByDate(strategyList);
-
-    const body = JSON.stringify(strategyList, null, 2);
-
-    // 5. Supabase에 저장 (배열 전체)
-    await fetch(strategyUploadUrl, {
-      method: "PUT",
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`
-      },
-      body: body
-    });
-
-    console.log('[analyze-strategy-cron] 전략 업데이트 완료:', strategyList.length);
-    console.log('[analyze-strategy-cron] parsedStrategy 구조:', JSON.stringify(parsedStrategy, null, 2));
-
-    return NextResponse.json({ 
-      message: '전략이 성공적으로 업데이트되었습니다.', 
-      new_strategy: parsedStrategy,
-      total_strategies: strategyList.length
+    return NextResponse.json({
+      message: '김치 프리미엄 트렌드가 업데이트되었습니다.',
     }, { status: 200 });
-
   } catch (err: any) {
     console.error('[analyze-strategy-cron] 에러:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
