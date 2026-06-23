@@ -13,9 +13,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'token, platform 필수' }, { status: 400 });
     }
 
-    // user_data 객체 생성
+    const kimchiDefaults = {
+      useTrend: false,
+      gimchiBuyPercent: 0,
+      gimchiSellPercent: 1,
+      kimchiFxBuyMax: 2000,
+      kimchiFxSellMin: 0,
+      kimchiFxDeltaCorrection: true,
+    };
+
+    let existingUserData: Record<string, unknown> = {};
+    if (userId) {
+      const { data: existingRow } = await supabase
+        .from('fcm_tokens')
+        .select('user_data')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (existingRow?.user_data && typeof existingRow.user_data === 'object') {
+        existingUserData = existingRow.user_data as Record<string, unknown>;
+      }
+    }
+
     const userData = {
-      useTrend: useTrend ?? false
+      ...kimchiDefaults,
+      ...existingUserData,
+      useTrend: useTrend ?? existingUserData.useTrend ?? false,
     };
 
     // 토큰 중복 방지: token 기준 upsert
