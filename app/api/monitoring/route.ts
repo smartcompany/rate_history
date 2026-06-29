@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { google } from 'googleapis';
+import {
+  fxBlocksBuy,
+  fxBlocksSell,
+  kimchiTradingPrices,
+  loadKimchiFxDeltaPayloadFromFile,
+  type KimchiFxDeltaPayload,
+} from '../../../lib/kimchiFxDelta';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
@@ -98,7 +105,11 @@ export async function GET() {
 
     console.log('[monitoring] latestExchangeRate:', latestExchangeRate, 'date:', latestExchangeRateDate);
 
-    const result = await sendPushMessagesIfneeded(usdtPrice, latestExchangeRate, latestExchangeRateDate);
+    const result = await sendPushMessagesIfneeded(
+      usdtPrice,
+      latestExchangeRate,
+      latestExchangeRateDate,
+    );
 
     console.log('[monitoring] sendPushMessagesIfneeded result:', result);
 
@@ -113,8 +124,13 @@ export async function GET() {
   }
 }
 
-async function sendPushMessagesIfneeded(usdtPrice: any, latestExchangeRate: any, referenceDate: string) {
+async function sendPushMessagesIfneeded(
+  usdtPrice: any,
+  latestExchangeRate: any,
+  referenceDate: string,
+) {
   console.log('[monitoring] sendPushMessagesIfneeded 호출:', { usdtPrice, latestExchangeRate, referenceDate });
+  const kimchiFxDeltaBase = loadKimchiFxDeltaPayloadFromFile();
   const { data: tokensData, error } = await supabase
     .from('fcm_tokens')
     .select('token, user_data')
@@ -155,6 +171,7 @@ async function sendPushMessagesIfneeded(usdtPrice: any, latestExchangeRate: any,
       latestExchangeRate,
       user_data,
       trendData,
+      kimchiFxDeltaBase,
     );
 
     if (action === '대기') {
@@ -217,6 +234,7 @@ async function makeBody(
   latestExchangeRate: any,
   userData: any,
   trendData: any,
+  kimchiFxDeltaBase: KimchiFxDeltaPayload | null,
 ): Promise<{ buyPrice: any; sellPrice: any; action: any; body: any; }> {
   let buyPrice = null;
   let sellPrice = null;
@@ -228,16 +246,26 @@ async function makeBody(
       buyPrice = trendData.buyPrice;
       sellPrice = trendData.sellPrice;
     } else {
-      const buyPercent = Number(userData.gimchiBuyPercent ?? 0);
-      const sellPercent = Number(userData.gimchiSellPercent ?? 1);
-      buyPrice = Number((latestExchangeRate * (1 + buyPercent / 100)).toFixed(1));
-      sellPrice = Number((latestExchangeRate * (1 + sellPercent / 100)).toFixed(1));
+      const { buyPrice: rawBuy, sellPrice: rawSell, deltaPp } = kimchiTradingPrices(
+        Number(latestExchangeRate),
+        userData,
+        kimchiFxDeltaBase,
+      );
+      buyPrice = Number(rawBuy.toFixed(1));
+      sellPrice = Number(rawSell.toFixed(1));
+      if (userData.kimchiFxDeltaCorrection === true && deltaPp !== 0) {
+        logic = `김치 프리미엄 분석 (환율 보정 Δ ${deltaPp.toFixed(2)}pp)`;
+      }
     }
 
     if (usdtPrice < buyPrice) {
-      action = '매수';
+      if (!fxBlocksBuy(Number(latestExchangeRate), userData)) {
+        action = '매수';
+      }
     } else if (usdtPrice > sellPrice) {
-      action = '매도';
+      if (!fxBlocksSell(Number(latestExchangeRate), userData)) {
+        action = '매도';
+      }
     } else {
       action = '대기';
     }
