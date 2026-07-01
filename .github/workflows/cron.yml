@@ -13,14 +13,6 @@ jobs:
         run: |
           curl -X GET https://rate-history.vercel.app/api/monitoring
       
-      - name: Update kimchi premium trends
-        run: |
-          echo "Calling analyze-strategy-cron API (kimchi trends only)..."
-          curl -X GET https://rate-history.vercel.app/api/analyze-strategy-cron \
-            -H "Content-Type: application/json" \
-            -H "User-Agent: github-actions-cron" \
-            --fail --show-error --silent || echo "Kimchi trend API failed"
-      
       - name: Update BTC strategy (if needed)
         run: |
           echo "Calling analyze-btc-strategy-cron API..."

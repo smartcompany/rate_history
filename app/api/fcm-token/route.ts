@@ -7,14 +7,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 export async function POST(req: Request) {
   try {
-    const { token, platform, userId, useTrend } = await req.json();
+    const { token, platform, userId } = await req.json();
 
     if (!token || !platform) {
       return NextResponse.json({ error: 'token, platform 필수' }, { status: 400 });
     }
 
     const kimchiDefaults = {
-      useTrend: false,
       gimchiBuyPercent: 0,
       gimchiSellPercent: 1,
       kimchiFxBuyMax: 2000,
@@ -34,13 +33,12 @@ export async function POST(req: Request) {
       }
     }
 
+    const { useTrend: _removedUseTrend, ...restExisting } = existingUserData;
     const userData = {
       ...kimchiDefaults,
-      ...existingUserData,
-      useTrend: useTrend ?? existingUserData.useTrend ?? false,
+      ...restExisting,
     };
 
-    // 토큰 중복 방지: token 기준 upsert
     const { error } = await supabase
       .from('fcm_tokens')
       .upsert(

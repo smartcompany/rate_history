@@ -1,65 +1,12 @@
 import { NextResponse } from 'next/server';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
-const STORAGE_BUCKET = "rate-history";
-const STRATEGE_PATH = "analyze-strategy.json";
-const GIMCH_PREMIUM_TREND_PATH = "kimchi-premium-trend.json";
-
-const strategyUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${STRATEGE_PATH}`;
-const gimchPremiumTrendUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${GIMCH_PREMIUM_TREND_PATH}`;
-
-// Next.js API Route Handler
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const includeKimchiTrends = searchParams.get('includeKimchiTrends') === 'true';
-    
-    console.log('[analyze-strategy] 김치 프리미엄 트렌드 조회', { includeKimchiTrends });
-
-    let kimchiTrends = null;
-    if (includeKimchiTrends) {
-      try {
-        const trendRes = await fetch(gimchPremiumTrendUrl, {
-          headers: { apikey: SUPABASE_KEY }
-        });
-
-        if (trendRes.ok) {
-          kimchiTrends = await trendRes.json();
-          console.log('[analyze-strategy] 김치 프리미엄 트렌드 데이터 로드:', Object.keys(kimchiTrends).length, '일');
-        } else {
-          console.warn('[analyze-strategy] 김치 프리미엄 트렌드 데이터 없음');
-        }
-      } catch (trendError) {
-        console.warn('[analyze-strategy] 김치 프리미엄 트렌드 로드 실패:', trendError);
-      }
-    }
-
-    if (includeKimchiTrends) {
-      const response = {
-        strategies: [],
-        kimchiTrends: kimchiTrends ?? {},
-      };
-
-      console.log('[analyze-strategy] 김치 트렌드 데이터 반환:', Object.keys(response.kimchiTrends).length, '일');
-      return new Response(
-        JSON.stringify(response, null, 2),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    return new Response(
-      JSON.stringify([], null, 2),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-  } catch (err: any) {
-    console.error('[analyze-strategy] 에러:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+// 레거시 AI/추세 전략 제거. 클라이언트 호환용 빈 strategies 응답만 유지.
+export async function GET() {
+  return new Response(
+    JSON.stringify({ strategies: [] }, null, 2),
+    {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
 }

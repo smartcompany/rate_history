@@ -13,69 +13,11 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
 const STORAGE_BUCKET = "rate-history";
 const EXCHANGE_RATE_PATH = "rate-history.json";
-const KIMCHI_TRENDS_PATH = "kimchi-premium-trend.json";
 const exchangeRateUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${EXCHANGE_RATE_PATH}`;
-const kimchiTrendsUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${KIMCHI_TRENDS_PATH}`;
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const serviceAccount = JSON.parse(process.env.GOOGLE_CREDENTIALS!);
 const PROJECT_ID = serviceAccount.project_id;
-
-async function calculateKimchiTrends(exchangeRate: number, targetDate: string): Promise<{ buyPrice: number, sellPrice: number } | null> {
-  try {
-    const trendResponse = await fetch(kimchiTrendsUrl);
-
-    if (!trendResponse.ok) {
-      console.warn('[monitoring] kimchiTrendsUrl에서 김치 프리미엄 트렌드 데이터를 가져올 수 없음');
-      return null;
-    }
-
-    const trends = await trendResponse.json();
-
-    if (!trends || Object.keys(trends).length === 0) {
-      console.warn('[monitoring] 김치 프리미엄 트렌드 데이터가 없음');
-      return null;
-    }
-
-    const targetDateTime = new Date(targetDate);
-    const targetDateStr = targetDateTime.toISOString().split('T')[0];
-
-    let trendData = trends[targetDateStr];
-
-    if (!trendData) {
-      const sortedDates = Object.keys(trends).sort().reverse();
-      for (const dateStr of sortedDates) {
-        const trendDate = new Date(dateStr);
-        if (trendDate <= targetDateTime) {
-          trendData = trends[dateStr];
-          break;
-        }
-      }
-    }
-
-    if (!trendData) {
-      console.warn('[monitoring] 해당 날짜의 김치 프리미엄 트렌드 데이터를 찾을 수 없음');
-      return null;
-    }
-
-    const buyPrice = Number((exchangeRate * (1 + trendData.buy_threshold / 100)).toFixed(1));
-    const sellPrice = Number((exchangeRate * (1 + trendData.sell_threshold / 100)).toFixed(1));
-
-    console.log('[monitoring] 김치 프리미엄 트렌드 계산:', {
-      targetDate: targetDateStr,
-      buyThreshold: trendData.buy_threshold,
-      sellThreshold: trendData.sell_threshold,
-      buyPrice,
-      sellPrice
-    });
-
-    return { buyPrice, sellPrice };
-
-  } catch (error) {
-    console.error('[monitoring] 김치 프리미엄 트렌드 계산 실패:', error);
-    return null;
-  }
-}
 
 function resolvePushType(userData: any): 'kimchi' | 'off' {
   if (!userData) return 'off';
@@ -159,9 +101,6 @@ async function sendPushMessagesIfneeded(
   await jwtClient.authorize();
   const accessToken = jwtClient.credentials.access_token;
 
-  const trendData = await calculateKimchiTrends(latestExchangeRate, referenceDate);
-  console.log('[monitoring] trendData:', trendData);
-
   console.log('[monitoring] 푸시 전송 시작:', userTokens.length, '개 토큰');
   for (const user of userTokens) {
     const { token, user_data } = user;
@@ -170,7 +109,6 @@ async function sendPushMessagesIfneeded(
       usdtPrice,
       latestExchangeRate,
       user_data,
-      trendData,
       kimchiFxDeltaBase,
     );
 
@@ -233,7 +171,6 @@ async function makeBody(
   usdtPrice: any,
   latestExchangeRate: any,
   userData: any,
-  trendData: any,
   kimchiFxDeltaBase: KimchiFxDeltaPayload | null,
 ): Promise<{ buyPrice: any; sellPrice: any; action: any; body: any; }> {
   let buyPrice = null;
@@ -242,20 +179,15 @@ async function makeBody(
   let logic = '김치 프리미엄 분석';
 
   if (resolvePushType(userData) === 'kimchi') {
-    if (userData.useTrend === true && trendData !== null) {
-      buyPrice = trendData.buyPrice;
-      sellPrice = trendData.sellPrice;
-    } else {
-      const { buyPrice: rawBuy, sellPrice: rawSell, deltaPp } = kimchiTradingPrices(
-        Number(latestExchangeRate),
-        userData,
-        kimchiFxDeltaBase,
-      );
-      buyPrice = Number(rawBuy.toFixed(1));
-      sellPrice = Number(rawSell.toFixed(1));
-      if (userData.kimchiFxDeltaCorrection === true && deltaPp !== 0) {
-        logic = `김치 프리미엄 분석 (환율 보정 Δ ${deltaPp.toFixed(2)}pp)`;
-      }
+    const { buyPrice: rawBuy, sellPrice: rawSell, deltaPp } = kimchiTradingPrices(
+      Number(latestExchangeRate),
+      userData,
+      kimchiFxDeltaBase,
+    );
+    buyPrice = Number(rawBuy.toFixed(1));
+    sellPrice = Number(rawSell.toFixed(1));
+    if (userData.kimchiFxDeltaCorrection === true && deltaPp !== 0) {
+      logic = `김치 프리미엄 분석 (환율 보정 Δ ${deltaPp.toFixed(2)}pp)`;
     }
 
     if (usdtPrice < buyPrice) {
