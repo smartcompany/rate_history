@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { fetchUpbitJson, upbitErrorResponse, UpbitError } from '../../../lib/upbit';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
@@ -20,11 +21,9 @@ function formatDate(date: Date) {
  */
 async function fetchUpbitUSDTByPage(count = 200) {
   const url = `https://api.upbit.com/v1/candles/days?market=KRW-USDT&count=${count}`;
-  const res = await fetch(url, {
+  const data = await fetchUpbitJson(url, {
     headers: { 'User-Agent': 'Mozilla/5.0' }
   });
-  if (!res.ok) throw new Error('Upbit USDT fetch failed');
-  const data = await res.json();
 
   // [{ date, open: close, high, low }, ...] 형태로 변환
   return data.map((item: any) => ({
@@ -145,6 +144,10 @@ export async function GET(request: Request) {
       );
     }
   } catch (err: any) {
+    if (err instanceof UpbitError) {
+      console.error('[USDT-HISTORY ERROR] 업비트 오류 (점검 여부:', err.isMaintenance, '):', err.message);
+      return upbitErrorResponse(err);
+    }
     console.error(err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

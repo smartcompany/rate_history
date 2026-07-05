@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { differenceInCalendarDays } from 'date-fns'; // 상단에 추가 (date-fns 설치 필요)
+import { fetchUpbitJson, upbitErrorResponse, UpbitError } from '../../../lib/upbit';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
@@ -26,21 +27,12 @@ async function fetchUpbitBTCByPage(count = 200) {
   const url = `https://api.upbit.com/v1/candles/days?market=KRW-BTC&count=${count}`;
   console.log(`[fetchUpbitBTCByPage] 요청 URL:`, url);
 
-  const res = await fetch(url, {
+  const data = await fetchUpbitJson(url, {
     headers: {
       'User-Agent': 'Mozilla/5.0',
       // 필요시 추가 헤더
     }
   });
-  console.log(`[fetchUpbitBTCByPage] 응답 status:`, res.status);
-
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`[fetchUpbitBTCByPage] 에러 응답:`, errText);
-    throw new Error('Upbit fetch failed');
-  }
-
-  const data = await res.json();
   console.log(`[fetchUpbitBTCByPage] 데이터 개수:`, Array.isArray(data) ? data.length : 'not array');
   // 날짜 리스트 로그 (최신 → 과거 순)
   console.log(
@@ -227,6 +219,10 @@ export async function GET(request: Request) {
       }
     );
   } catch (err) {
+    if (err instanceof UpbitError) {
+      console.error('[gimch-history] 업비트 오류 (점검 여부:', err.isMaintenance, '):', err.message);
+      return upbitErrorResponse(err);
+    }
     console.error('김치 프리미엄 처리 에러:', err);
     return NextResponse.json({ error: "김치 프리미엄 데이터를 처리하지 못했습니다." }, { status: 500 });
   }

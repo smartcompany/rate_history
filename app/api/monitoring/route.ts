@@ -8,6 +8,7 @@ import {
   loadKimchiFxDeltaPayloadFromFile,
   type KimchiFxDeltaPayload,
 } from '../../../lib/kimchiFxDelta';
+import { fetchUpbitJson, upbitErrorResponse, UpbitError } from '../../../lib/upbit';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
@@ -28,12 +29,7 @@ function resolvePushType(userData: any): 'kimchi' | 'off' {
 
 export async function GET() {
   try {
-    const upbitRes = await fetch('https://api.upbit.com/v1/ticker?markets=KRW-USDT');
-    if (!upbitRes.ok) {
-      console.error('[monitoring] 업비트 USDT 가격 조회 실패');
-      return NextResponse.json({ error: '업비트 USDT 가격 조회 실패' }, { status: 500 });
-    }
-    const upbitData = await upbitRes.json();
+    const upbitData = await fetchUpbitJson('https://api.upbit.com/v1/ticker?markets=KRW-USDT');
     const usdtPrice = upbitData[0]?.trade_price;
     console.log('[monitoring] usdtPrice:', usdtPrice);
     if (!usdtPrice) {
@@ -61,6 +57,10 @@ export async function GET() {
       latestExchangeRateDate,
     });
   } catch (err: any) {
+    if (err instanceof UpbitError) {
+      console.error('[monitoring] 업비트 오류 (점검 여부:', err.isMaintenance, '):', err.message);
+      return upbitErrorResponse(err);
+    }
     console.error('[monitoring] 예외 발생:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
