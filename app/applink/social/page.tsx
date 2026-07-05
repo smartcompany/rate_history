@@ -6,10 +6,6 @@ const IOS_APP_STORE_WEB =
   "https://apps.apple.com/us/app/usdt-signal/id6746846210";
 const PLAY_STORE_WEB =
   "https://play.google.com/store/apps/details?id=com.smartCompany.usdtSignal";
-const IOS_APP_STORE_ITMS =
-  "itms-apps://apps.apple.com/us/app/usdt-signal/id6746846210";
-const PLAY_STORE_MARKET =
-  "market://details?id=com.smartCompany.usdtSignal";
 
 const SOCIAL_PATH = "/applink/social";
 
@@ -22,21 +18,10 @@ const BOOT_SCRIPT = `
   var inApp = /(Twitter|X\\/[\\d.]+|FBIOS|FBAN|FBAV|Line\\/|KakaoTalk|Kakao|Daum|KAKAOTALK|Whatsapp|Telegram|Snapchat|Slack|LinkedIn|FB_IAB|Instagram|Pinterest|musical_ly|ByteDance|Aweme|; wv\\))/i.test(ua);
   var isAndroid = /android/i.test(ua);
   var isIOS = /iphone|ipad|ipod/i.test(ua);
-  var elIos = document.getElementById("applink-btn-ios");
-  var elAnd = document.getElementById("applink-btn-android");
-  if (isIOS && elIos) { elIos.setAttribute("href", ${JSON.stringify(IOS_APP_STORE_ITMS)}); }
-  if (isAndroid && elAnd) { elAnd.setAttribute("href", ${JSON.stringify(PLAY_STORE_MARKET)}); }
   if (inApp) { return; }
   if (!isAndroid && !isIOS) { return; }
-  var scheme = isAndroid ? ${JSON.stringify(PLAY_STORE_MARKET)} : ${JSON.stringify(IOS_APP_STORE_ITMS)};
   var web = isAndroid ? ${JSON.stringify(PLAY_STORE_WEB)} : ${JSON.stringify(IOS_APP_STORE_WEB)};
-  var t = window.setTimeout(function () { window.location.replace(web); }, 2000);
-  function cancel() {
-    if (t !== null) { window.clearTimeout(t); t = null; }
-  }
-  document.addEventListener("visibilitychange", function () { if (document.hidden) { cancel(); } });
-  window.addEventListener("pagehide", cancel);
-  try { window.location.href = scheme; } catch (e) { cancel(); window.location.replace(web); }
+  window.location.replace(web);
 })();
 `.trim();
 
