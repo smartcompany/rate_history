@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { fetchUpbitJson, upbitErrorResponse, UpbitError } from '../../../lib/upbit';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
@@ -21,15 +22,9 @@ function formatDate(date: Date) {
 async function fetchUpbitBTCByPage(count = 200) {
   const url = `https://api.upbit.com/v1/candles/days?market=KRW-BTC&count=${count}`;
   console.log('[BTC-HISTORY] Upbit API 호출:', url);
-  const res = await fetch(url, {
+  const data = await fetchUpbitJson(url, {
     headers: { 'User-Agent': 'Mozilla/5.0' }
   });
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error('[BTC-HISTORY] Upbit API 실패:', res.status, errorText);
-    throw new Error(`Upbit BTC fetch failed: ${res.status} - ${errorText}`);
-  }
-  const data = await res.json();
   console.log('[BTC-HISTORY] Upbit API 응답 받음, 항목 수:', data.length);
 
   // [{ date, open, close, high, low }, ...] 형태로 변환
@@ -190,6 +185,10 @@ export async function GET(request: Request) {
       );
     }
   } catch (err: any) {
+    if (err instanceof UpbitError) {
+      console.error('[BTC-HISTORY ERROR] 업비트 오류 (점검 여부:', err.isMaintenance, '):', err.message);
+      return upbitErrorResponse(err);
+    }
     console.error('[BTC-HISTORY ERROR]', err);
     console.error('[BTC-HISTORY ERROR] Stack:', err.stack);
     return NextResponse.json({ 
