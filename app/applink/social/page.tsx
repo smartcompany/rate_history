@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 
 const SITE_ORIGIN = "https://rate-history.vercel.app";
 
-const IOS_APP_STORE_WEB =
-  "https://apps.apple.com/us/app/usdt-signal/id6746846210";
+const IOS_APP_STORE_WEB = "https://apps.apple.com/app/id6746846210";
 const PLAY_STORE_WEB =
   "https://play.google.com/store/apps/details?id=com.smartCompany.usdtSignal";
 

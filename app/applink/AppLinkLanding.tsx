@@ -3,8 +3,7 @@ import type { Metadata } from "next";
 /** 앱 인애서 「공유하기」용 `/applink` 전용(X용 `/applink/social` 과 코드 공유 안 함). */
 const SITE_ORIGIN = "https://rate-history.vercel.app";
 
-const IOS_APP_STORE_WEB =
-  "https://apps.apple.com/us/app/usdt-signal/id6746846210";
+const IOS_APP_STORE_WEB = "https://apps.apple.com/app/id6746846210";
 const PLAY_STORE_WEB =
   "https://play.google.com/store/apps/details?id=com.smartCompany.usdtSignal";
 
