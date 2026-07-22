@@ -2,11 +2,9 @@ import { NextResponse } from 'next/server';
 import {
   applySeriesMeta,
   assertSupabaseEnv,
-  backfillCutoffMs,
   fetchStorageJson,
-  kstHourString,
-  kstStringToEpochMs,
   mergeSeriesAddOnly,
+  trimToRecentDays,
   uploadStorageJson,
   type HourlyPayload,
   type HourlySeriesEntry,
@@ -14,7 +12,6 @@ import {
 
 const SNAPSHOT_PATH = 'usd_krw_hour.json';
 const ARCHIVE_PATH = 'usd_krw_hour_archive.json';
-const YAHOO_SYMBOL = 'USDKRW=X';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -27,46 +24,9 @@ function emptyArchive(): HourlyPayload {
     end_date: '',
     time_unit: 'hour',
     source: 'yfinance',
-    note: '시간봉 전체 누적 아카이브. 스냅샷(최근 구간 유지)을 계속 병합하고 과거는 Yahoo로 백필합니다.',
+    note: '시간봉 누적 아카이브. 스냅샷(최근 구간 유지)을 계속 병합해 데이터 유실을 막습니다.',
     series: [],
   };
-}
-
-/** Yahoo Finance v8 chart API에서 [fromMs, toMs) 구간 1시간봉 종가를 가져옵니다. */
-async function fetchYahooHourly(fromMs: number, toMs: number): Promise<HourlySeriesEntry[]> {
-  const period1 = Math.floor(fromMs / 1000);
-  const period2 = Math.floor(toMs / 1000);
-  if (period1 >= period2) return [];
-
-  const url =
-    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(YAHOO_SYMBOL)}` +
-    `?period1=${period1}&period2=${period2}&interval=1h`;
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (rate-history backfill)' },
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    console.error('[rate-history-hour] Yahoo fetch failed:', res.status, text.slice(0, 300));
-    return [];
-  }
-
-  const json = await res.json();
-  const result = json?.chart?.result?.[0];
-  const timestamps: number[] = result?.timestamp ?? [];
-  const closes: (number | null)[] = result?.indicators?.quote?.[0]?.close ?? [];
-
-  const entries: HourlySeriesEntry[] = [];
-  const seen = new Set<string>();
-  for (let i = 0; i < timestamps.length; i++) {
-    const close = closes[i];
-    if (close == null || Number.isNaN(Number(close))) continue;
-    const dtStr = kstHourString(timestamps[i] * 1000, 'T');
-    if (seen.has(dtStr)) continue;
-    seen.add(dtStr);
-    entries.push({ datetime: dtStr, usd_krw: Math.round(Number(close) * 100) / 100 });
-  }
-  return entries;
 }
 
 export async function GET() {
@@ -98,26 +58,12 @@ export async function GET() {
       added += mergeSeriesAddOnly(series, snapshot.series);
     }
 
-    // 아카이브 시작 시점이 Yahoo 1h 제공 한도(약 730일)보다 뒤라면, 그 이전 구간을 백필합니다.
-    const cutoffMs = backfillCutoffMs();
-    const firstMs = series.length > 0 ? kstStringToEpochMs(series[0].datetime) : Date.now();
-    if (firstMs - cutoffMs > 24 * 60 * 60 * 1000) {
-      try {
-        const backfilled = await fetchYahooHourly(cutoffMs, firstMs);
-        const backfillAdded = mergeSeriesAddOnly(series, backfilled);
-        added += backfillAdded;
-        console.log('[rate-history-hour] Yahoo backfill:', backfillAdded, 'entries');
-      } catch (e) {
-        console.error('[rate-history-hour] Yahoo backfill failed:', e);
-      }
-    }
-
     if (series.length === 0) {
       return NextResponse.json({ error: 'Hourly rate snapshot not found' }, { status: 404 });
     }
 
+    // 아카이브에는 전체를 누적 저장하고, 응답은 최근 3달(90일)만 노출합니다.
     applySeriesMeta(archive, series);
-
     if (added > 0) {
       try {
         await uploadStorageJson(ARCHIVE_PATH, archive);
@@ -127,7 +73,15 @@ export async function GET() {
       }
     }
 
-    return NextResponse.json(archive);
+    const recent = trimToRecentDays(series);
+    const response: HourlyPayload = {
+      ...archive,
+      note: '최근 90일 시간봉입니다. 전체 데이터는 아카이브에 계속 누적됩니다.',
+      series: recent,
+    };
+    applySeriesMeta(response, recent);
+
+    return NextResponse.json(response);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(err);
