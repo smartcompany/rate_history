@@ -21,7 +21,7 @@ jobs:
             -H "User-Agent: github-actions-cron" \
             --fail --show-error --silent || echo "BTC Strategy API failed"
 
-      # 시간봉 아카이브 유지: 스냅샷(최근 구간만 유지) → 아카이브 병합 + 과거 백필 트리거
+      # 시간봉 아카이브 유지: 스냅샷(최근 구간만 유지)을 아카이브에 병합해 데이터 유실 방지
       - name: Keep hourly archives up to date
         run: |
           curl -s -o /dev/null -w "rate-history-hour: %{http_code}\n" \

@@ -103,9 +103,13 @@ export function kstStringToEpochMs(datetime: string): number {
   return new Date(`${normalized}+09:00`).getTime();
 }
 
-/** 원천 API가 시간봉을 제공하는 최대 과거 기간 (Yahoo 1h 한도인 730일보다 하루 여유) */
-export const BACKFILL_MAX_DAYS = 729;
+/** API 응답에 노출할 최근 기간(일). 아카이브에는 전체가 누적되고, 응답만 이 기간으로 제한합니다. */
+export const DISPLAY_DAYS = 90;
 
-export function backfillCutoffMs(): number {
-  return Date.now() - BACKFILL_MAX_DAYS * 24 * 60 * 60 * 1000;
+export function trimToRecentDays(
+  series: HourlySeriesEntry[],
+  days: number = DISPLAY_DAYS,
+): HourlySeriesEntry[] {
+  const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+  return series.filter((e) => kstStringToEpochMs(e.datetime) >= cutoffMs);
 }
