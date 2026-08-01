@@ -20,4 +20,12 @@ jobs:
             -H "Content-Type: application/json" \
             -H "User-Agent: github-actions-cron" \
             --fail --show-error --silent || echo "BTC Strategy API failed"
+
+      # 시간봉 아카이브 유지: 스냅샷(최근 구간만 유지)을 아카이브에 병합해 데이터 유실 방지
+      - name: Keep hourly archives up to date
+        run: |
+          curl -s -o /dev/null -w "rate-history-hour: %{http_code}\n" \
+            https://rate-history.vercel.app/api/rate-history-hour || echo "rate-history-hour failed"
+          curl -s -o /dev/null -w "usdt-history-hour: %{http_code}\n" \
+            https://rate-history.vercel.app/api/usdt-history-hour || echo "usdt-history-hour failed"
       
