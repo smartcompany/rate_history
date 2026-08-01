@@ -19,7 +19,7 @@ export async function POST(req: Request) {
       kimchiFxBuyMax: 2000,
       kimchiFxSellMin: 0,
       kimchiFxDeltaCorrection: true,
-      kimchiFxTrendFilterEnabled: true,
+      kimchiFxTrendFilterEnabled: false,
       kimchiFxTrendLookback: 50,
     };
 

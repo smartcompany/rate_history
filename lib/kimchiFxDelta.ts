@@ -317,11 +317,11 @@ export function fxBlocksSell(
   return fxSellMin > 0 && exchangeRate > 0 && exchangeRate <= fxSellMin;
 }
 
-/** 앱 시뮬과 동일: 기본 ON. 명시적으로 false일 때만 끔. */
+/** 앱과 동일: 명시적으로 true일 때만 ON. 키 없음/false → OFF (기존 사용자 호환). */
 export function fxTrendFilterEnabled(
   userData: Record<string, unknown> | null | undefined,
 ): boolean {
-  return userData?.kimchiFxTrendFilterEnabled !== false;
+  return userData?.kimchiFxTrendFilterEnabled === true;
 }
 
 export function fxTrendLookbackDays(
