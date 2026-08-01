@@ -19,6 +19,8 @@ export async function POST(req: Request) {
       kimchiFxBuyMax: 2000,
       kimchiFxSellMin: 0,
       kimchiFxDeltaCorrection: true,
+      kimchiFxTrendFilterEnabled: true,
+      kimchiFxTrendLookback: 50,
     };
 
     let existingUserData: Record<string, unknown> = {};

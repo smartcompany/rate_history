@@ -4,6 +4,7 @@ import { google } from 'googleapis';
 import {
   fxBlocksBuy,
   fxBlocksSell,
+  fxTrendBlocksBuy,
   kimchiTradingPrices,
   loadKimchiFxDeltaPayloadFromFile,
   type KimchiFxDeltaPayload,
@@ -38,8 +39,10 @@ export async function GET() {
     }
 
     const exchangeRateData = await fetch(exchangeRateUrl).then(res => res.json());
-    const latestExchangeRateDate = Object.keys(exchangeRateData).sort().reverse()[0];
+    const sortedFxDates = Object.keys(exchangeRateData).sort();
+    const latestExchangeRateDate = sortedFxDates[sortedFxDates.length - 1];
     const latestExchangeRate = exchangeRateData[latestExchangeRateDate];
+    const fxValuesAscending = sortedFxDates.map((d) => Number(exchangeRateData[d]));
 
     console.log('[monitoring] latestExchangeRate:', latestExchangeRate, 'date:', latestExchangeRateDate);
 
@@ -47,6 +50,7 @@ export async function GET() {
       usdtPrice,
       latestExchangeRate,
       latestExchangeRateDate,
+      fxValuesAscending,
     );
 
     console.log('[monitoring] sendPushMessagesIfneeded result:', result);
@@ -70,6 +74,7 @@ async function sendPushMessagesIfneeded(
   usdtPrice: any,
   latestExchangeRate: any,
   referenceDate: string,
+  fxValuesAscending: number[],
 ) {
   console.log('[monitoring] sendPushMessagesIfneeded 호출:', { usdtPrice, latestExchangeRate, referenceDate });
   const kimchiFxDeltaBase = loadKimchiFxDeltaPayloadFromFile();
@@ -110,6 +115,7 @@ async function sendPushMessagesIfneeded(
       latestExchangeRate,
       user_data,
       kimchiFxDeltaBase,
+      fxValuesAscending,
     );
 
     if (action === '대기') {
@@ -172,6 +178,7 @@ async function makeBody(
   latestExchangeRate: any,
   userData: any,
   kimchiFxDeltaBase: KimchiFxDeltaPayload | null,
+  fxValuesAscending: number[],
 ): Promise<{ buyPrice: any; sellPrice: any; action: any; body: any; }> {
   let buyPrice = null;
   let sellPrice = null;
@@ -190,8 +197,13 @@ async function makeBody(
       logic = `김치 프리미엄 분석 (환율 보정 Δ ${deltaPp.toFixed(2)}pp)`;
     }
 
+    const trendBlocksBuy = fxTrendBlocksBuy(fxValuesAscending, userData);
+    if (trendBlocksBuy) {
+      logic = `${logic} · 환율 이평 아래(매수 제한)`;
+    }
+
     if (usdtPrice < buyPrice) {
-      if (!fxBlocksBuy(Number(latestExchangeRate), userData)) {
+      if (!fxBlocksBuy(Number(latestExchangeRate), userData) && !trendBlocksBuy) {
         action = '매수';
       }
     } else if (usdtPrice > sellPrice) {

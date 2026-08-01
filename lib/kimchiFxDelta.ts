@@ -316,3 +316,42 @@ export function fxBlocksSell(
   const fxSellMin = Number(userData?.kimchiFxSellMin ?? 0);
   return fxSellMin > 0 && exchangeRate > 0 && exchangeRate <= fxSellMin;
 }
+
+/** 앱 시뮬과 동일: 기본 ON. 명시적으로 false일 때만 끔. */
+export function fxTrendFilterEnabled(
+  userData: Record<string, unknown> | null | undefined,
+): boolean {
+  return userData?.kimchiFxTrendFilterEnabled !== false;
+}
+
+export function fxTrendLookbackDays(
+  userData: Record<string, unknown> | null | undefined,
+): number {
+  const n = Number(userData?.kimchiFxTrendLookback ?? 50);
+  if (!Number.isFinite(n)) return 50;
+  return Math.max(2, Math.min(365, Math.floor(n)));
+}
+
+/** 날짜 오름차순 환율 시계열에서 현재가 이평 아래면 true. 이평 미산출(초기)이면 false. */
+export function fxBelowSma(
+  fxValuesAscending: number[],
+  lookbackBars: number,
+): boolean {
+  if (lookbackBars < 1 || fxValuesAscending.length < lookbackBars) return false;
+  let sum = 0;
+  for (let i = fxValuesAscending.length - lookbackBars; i < fxValuesAscending.length; i++) {
+    sum += fxValuesAscending[i];
+  }
+  const sma = sum / lookbackBars;
+  const current = fxValuesAscending[fxValuesAscending.length - 1];
+  return current > 0 && current < sma;
+}
+
+/** 추세 필터 ON + 이평 아래이면 매수 차단. */
+export function fxTrendBlocksBuy(
+  fxValuesAscending: number[],
+  userData: Record<string, unknown> | null | undefined,
+): boolean {
+  if (!fxTrendFilterEnabled(userData)) return false;
+  return fxBelowSma(fxValuesAscending, fxTrendLookbackDays(userData));
+}
