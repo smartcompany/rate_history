@@ -1,6 +1,5 @@
 // app/api/rate-history/route.ts
 
-import * as cheerio from 'cheerio';
 import { NextResponse } from 'next/server';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -8,7 +7,7 @@ const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_KEY!;
 const STORAGE_BUCKET = "rate-history";
 const FILE_PATH = "rate-history.json";
 
-const baseUrl = "https://finance.naver.com/marketindex/exchangeDailyQuote.naver?marketindexCd=FX_USDKRW";
+const naverFxUrl = "https://api.stock.naver.com/marketindex/exchange/FX_USDKRW";
 const storageUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}/${FILE_PATH}`;
 const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${STORAGE_BUCKET}/${FILE_PATH}`;
 
@@ -34,25 +33,46 @@ function getAllDates(sinceDate: string, today: string): string[] {
   return dates; // 최신순
 }
 
-async function fetchRateByPage(page: number) {
-  const response = await fetch(`${baseUrl}&page=${page}`);
-  const html = await response.text();
-  const $ = cheerio.load(html);
+function parseNaverPrice(raw: unknown): number | null {
+  const rate = parseFloat(String(raw ?? "").replace(/,/g, ""));
+  return Number.isFinite(rate) && rate > 0 ? rate : null;
+}
 
-  const rows = $('table.tbl_exchange tbody tr');
-  const result: { date: string; rate: number }[] = [];
+function fxErrorResponse() {
+  return NextResponse.json({ error: "환율 정보 오류" }, { status: 502 });
+}
 
-  rows.each((_, el) => {
-    const tds = $(el).find('td');
-    const date = $(tds[0]).text().trim().replace(/\./g, '-');
-    const rateStr = $(tds[1]).text().trim().replace(',', '');
-    const rate = parseFloat(rateStr);
-
-    if (date && !isNaN(rate)) {
-      result.push({ date, rate });
-    }
+/** 최신 고시 환율. `calcPrice`가 없으면 `closePrice`. 실패·null이면 throw. */
+async function fetchLatestNaverRate(): Promise<{ date: string; rate: number }> {
+  const response = await fetch(naverFxUrl, {
+    headers: { Accept: "application/json" },
   });
+  if (!response.ok) throw new Error(`naver fx ${response.status}`);
 
+  const info = (await response.json())?.exchangeInfo;
+  const rate = parseNaverPrice(info?.calcPrice) ?? parseNaverPrice(info?.closePrice);
+  const date = String(info?.localTradedAt ?? "").slice(0, 10);
+  if (!date || rate == null) throw new Error("naver fx empty");
+  return { date, rate };
+}
+
+/** 일별 매매기준율. 과거 페이지는 같은 경로의 `/prices`. HTTP 오류면 throw, 마지막 페이지는 빈 배열. */
+async function fetchRateByPage(page: number) {
+  const response = await fetch(
+    `${naverFxUrl}/prices?page=${page}&pageSize=10`,
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) throw new Error(`naver fx prices ${response.status}`);
+
+  const rows = await response.json();
+  if (!Array.isArray(rows)) throw new Error("naver fx prices invalid");
+
+  const result: { date: string; rate: number }[] = [];
+  for (const row of rows) {
+    const date = String(row?.localTradedAt ?? "").slice(0, 10);
+    const rate = parseNaverPrice(row?.closePrice);
+    if (date && rate != null) result.push({ date, rate });
+  }
   return result;
 }
 
@@ -88,19 +108,27 @@ export async function GET(request: Request) {
   const days = Number(searchParams.get('days') || '0');
 
   if (days == 0) {
-    let history = {};
-    const rates = await fetchRateByPage(1);
-    for (const { date, rate } of rates) {
-      history[date] = rate;
-    }
-    
-    return new Response(
-      JSON.stringify(history, null, 2), // 2칸 들여쓰기
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
+    try {
+      const history: Record<string, number> = {};
+      const rates = await fetchRateByPage(1);
+      for (const { date, rate } of rates) {
+        history[date] = rate;
       }
-    );
+      const latest = await fetchLatestNaverRate();
+      history[latest.date] = latest.rate;
+      if (Object.keys(history).length === 0) return fxErrorResponse();
+
+      return new Response(
+        JSON.stringify(history, null, 2),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    } catch (err) {
+      console.error(err);
+      return fxErrorResponse();
+    }
   }
 
   const today = formatDate(new Date());
@@ -130,7 +158,10 @@ export async function GET(request: Request) {
         const rates = await fetchRateByPage(page);
         console.log(`페이지 ${page} 데이터:`, rates);
 
-        if (rates.length === 0) break;
+        if (rates.length === 0) {
+          if (page === 1) throw new Error("naver fx prices empty");
+          break;
+        }
 
         for (const { date, rate } of rates) {
           if (newHistory[date]) continue;
@@ -145,11 +176,17 @@ export async function GET(request: Request) {
         page += 1;
       }
 
+      const latest = await fetchLatestNaverRate();
+      if (new Date(latest.date) >= new Date(sinceDate)) {
+        newHistory[latest.date] = latest.rate;
+      }
+
       const allDates = getAllDates(sinceDate, today);
 
       let prevRate: number | undefined = undefined;
       for (const date of allDates) {
         if (newHistory[date] == undefined) {
+          if (prevRate == undefined) continue;
           console.log(`누락된 날짜 환율 채움: ${date} = ${prevRate}`);
           newHistory[date] = prevRate;
         } else {
@@ -168,16 +205,10 @@ export async function GET(request: Request) {
 
       await saveRateHistory(newHistory);
     } else if (lastDate.getTime() === todayDate.getTime()) {
-      // 오늘 날짜 환율이 이미 존재 하지만 새로 갱신된 것을 쓰기 위해서 받아서 갱신한다 
-      const rates = await fetchRateByPage(1);
-      console.log(`오늘 날짜 환율 갱신을 위한 첫 페이지 가져오기:`, rates);
-      for (const { date, rate } of rates) {
-        if (date === today) {
-          newHistory[date] = rate;
-          console.log(`오늘 날짜 환율 갱신: ${date} = ${rate}`);
-          break; // 오늘 날짜만 갱신
-        }
-      }
+      // 최신 고시를 못 받으면 저장본을 성공처럼 돌려주지 않는다
+      const latest = await fetchLatestNaverRate();
+      console.log(`오늘 날짜 환율 갱신:`, latest);
+      newHistory[latest.date] = latest.rate;
       await saveRateHistory(newHistory);
     }
 
@@ -190,6 +221,6 @@ export async function GET(request: Request) {
     );
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "환율 데이터를 처리하지 못했습니다." }, { status: 500 });
+    return fxErrorResponse();
   }
 }
